@@ -428,7 +428,7 @@ export default function HomePage() {
     setUserProjects(DEFAULT_WORKSPACE_PROJECTS);
     setSelectedProject("all");
     setRefreshTrigger((prev) => prev + 1);
-    window.location.href = "/login?logout=true";
+    window.location.href = "/login";
   };
 
   const handleConfirmedDeleteAccount = async () => {
@@ -464,7 +464,7 @@ export default function HomePage() {
     localStorage.removeItem("matters_sandbox_guest");
     setCurrentUser(null);
     setIsDeleteAccountOpen(false);
-    window.location.href = "/login?logout=true";
+    window.location.href = "/login";
   };
 
   const handleConfirmedExitSandbox = () => {
@@ -475,7 +475,7 @@ export default function HomePage() {
     setUserProjects(DEFAULT_WORKSPACE_PROJECTS);
     setSelectedProject("all");
     setIsExitSandboxOpen(false);
-    window.location.href = "/login?logout=true";
+    window.location.href = "/login";
   };
 
   const graphName = currentUser?.uid
@@ -577,6 +577,7 @@ export default function HomePage() {
         {isGuest && (
           <SandboxSwitcher
             currentPersona={selectedPersona}
+            refreshTrigger={refreshTrigger}
             onSelectPersona={(personaId) => {
               setSelectedPersona(personaId);
               const allowed = PERSONA_PROJECTS[personaId] || [];

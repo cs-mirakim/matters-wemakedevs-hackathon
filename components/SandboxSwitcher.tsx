@@ -59,12 +59,14 @@ interface SandboxSwitcherProps {
   currentPersona: string;
   onSelectPersona: (personaId: string) => void;
   onResetSandbox?: () => void;
+  refreshTrigger?: number;
 }
 
 export default function SandboxSwitcher({
   currentPersona,
   onSelectPersona,
   onResetSandbox,
+  refreshTrigger,
 }: SandboxSwitcherProps) {
   const [hasSofia, setHasSofia] = useState(false);
 
@@ -73,12 +75,15 @@ export default function SandboxSwitcher({
       const stored = localStorage.getItem("matters_sandbox_collaborators");
       if (stored) {
         const list = JSON.parse(stored);
-        if (Array.isArray(list) && list.some((c: any) => c.name?.toLowerCase().includes("sofia"))) {
-          setHasSofia(true);
-        }
+        const exists = Array.isArray(list) && list.some((c: any) => c.name?.toLowerCase().includes("sofia"));
+        setHasSofia(exists);
+      } else {
+        setHasSofia(false);
       }
-    } catch {}
-  }, [currentPersona]);
+    } catch {
+      setHasSofia(false);
+    }
+  }, [currentPersona, refreshTrigger]);
 
   const activePersonaList = Object.values(PERSONAS).filter((p) => {
     if (p.id === "sofia") return hasSofia || currentPersona === "sofia";

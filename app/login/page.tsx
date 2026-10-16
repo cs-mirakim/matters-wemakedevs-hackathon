@@ -100,29 +100,30 @@ function LoginContent() {
     }
   }, [searchParams]);
 
-  // 1. If already logged in, instantly route to workspace (unless explicit logout)
+  // 1. Clean up URL if ?logout=true was present and check existing session
   useEffect(() => {
-    const isLogout = searchParams.get("logout") === "true";
-    if (isLogout) {
-      try {
-        localStorage.removeItem("matters_dev_user");
-        localStorage.removeItem("matters_sandbox_guest");
-        localStorage.removeItem("matters_guest_memories");
-        localStorage.removeItem("matters_reverted_memories");
-        localStorage.removeItem("matters_deleted_projects");
-      } catch {}
-    } else {
-      try {
-        const existing = localStorage.getItem("matters_dev_user");
-        if (existing) {
-          const parsed = JSON.parse(existing);
-          if (parsed?.uid) {
-            window.location.href = "/";
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      if (url.searchParams.has("logout")) {
+        url.searchParams.delete("logout");
+        window.history.replaceState({}, "", url.pathname + (url.search ? url.search : ""));
+        try {
+          localStorage.removeItem("matters_dev_user");
+          localStorage.removeItem("matters_sandbox_guest");
+        } catch {}
+      } else {
+        try {
+          const existing = localStorage.getItem("matters_dev_user");
+          if (existing) {
+            const parsed = JSON.parse(existing);
+            if (parsed?.uid) {
+              window.location.href = "/";
+            }
           }
-        }
-      } catch {}
+        } catch {}
+      }
     }
-  }, [searchParams]);
+  }, []);
 
   // Unified frictionless login & auto-provisioning
   const completeLogin = async (googleUser: any) => {
@@ -176,9 +177,6 @@ function LoginContent() {
 
   // 2. Unconditional auth state & redirect listener (catches Google sign-in immediately)
   useEffect(() => {
-    const isLogout = searchParams.get("logout") === "true";
-    if (isLogout) return;
-
     let isDone = false;
 
     // Listen continuously to Firebase Auth state
@@ -204,7 +202,7 @@ function LoginContent() {
     return () => {
       unsubscribe();
     };
-  }, [searchParams, pendingInvite]);
+  }, [pendingInvite]);
 
   const handleGoogleSignIn = async () => {
     setLoading(true);

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { X, UserPlus, Check, Copy, Shield, Users, Mail, FolderGit2, Sparkles } from "lucide-react";
 
 interface InviteModalProps {
@@ -41,6 +41,35 @@ export default function InviteModal({
     { name: "You (Owner)", email: "owner@workspace.local", role: "admin", project: "All Projects" }
   ]);
   const [justInvitedSuccess, setJustInvitedSuccess] = useState(false);
+
+  // Synchronize invited collaborators from sandbox persistence
+  useEffect(() => {
+    if (!isOpen) return;
+    try {
+      const baseList = [
+        { name: "You (Owner)", email: "owner@workspace.local", role: "admin", project: "All Projects" }
+      ];
+      const stored = localStorage.getItem("matters_sandbox_collaborators");
+      if (stored) {
+        const list = JSON.parse(stored);
+        if (Array.isArray(list)) {
+          const extra = list.map((c: any) => ({
+            name: c.name || "Collaborator",
+            email: c.email || "collab@workspace.local",
+            role: c.role || "Member",
+            project: Array.isArray(c.projects) ? c.projects.join(", ") : (c.project || "All Projects"),
+          }));
+          setInvitedList([...baseList, ...extra]);
+          return;
+        }
+      }
+      setInvitedList(baseList);
+    } catch {
+      setInvitedList([
+        { name: "You (Owner)", email: "owner@workspace.local", role: "admin", project: "All Projects" }
+      ]);
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
