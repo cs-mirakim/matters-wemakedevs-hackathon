@@ -130,14 +130,34 @@ function LoginContent() {
           });
           const checkData = await checkRes.json();
 
+          const authIntent = typeof window !== "undefined" ? sessionStorage.getItem("matters_auth_intent") : null;
+          if (typeof window !== "undefined") sessionStorage.removeItem("matters_auth_intent");
+
           if (!checkData.registered) {
-            setIsEntering(false);
-            try { await firebaseSignOut(auth); } catch {}
-            localStorage.removeItem("matters_dev_user");
-            setErrorMessage(
-              `Google Account (${googleUser.email}) is not registered yet. Please click "Sign Up" below to create an account first.`
-            );
-            return;
+            if (authIntent === "signup") {
+              setEntryStepText("Creating personal FalkorDB tenant graph container...");
+              await fetch("/api/auth/user", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  action: "register",
+                  user: {
+                    uid: googleUser.uid,
+                    email: googleUser.email,
+                    displayName: googleUser.displayName || googleUser.email?.split("@")[0] || "User",
+                    photoURL: googleUser.photoURL || null,
+                  },
+                }),
+              });
+            } else {
+              setIsEntering(false);
+              try { await firebaseSignOut(auth); } catch {}
+              localStorage.removeItem("matters_dev_user");
+              setErrorMessage(
+                `Google Account (${googleUser.email}) is not registered yet. Please click "Sign Up" below to create an account first.`
+              );
+              return;
+            }
           }
 
           setEntryStepText("Connecting to FalkorDB Cloud & loading workspace graph...");
@@ -160,6 +180,7 @@ function LoginContent() {
     }
     processRedirectAuth();
   }, [pendingInvite, router]);
+
 
 
   const handleGoogleSignIn = async () => {
@@ -225,7 +246,12 @@ function LoginContent() {
         : "/";
       router.push(targetUrl);
     } catch (err: any) {
-      if (err?.code === "auth/popup-blocked") {
+      if (
+        err?.code === "auth/popup-blocked" ||
+        err?.code === "auth/cancelled-popup-request" ||
+        err?.message?.toLowerCase().includes("popup")
+      ) {
+        if (typeof window !== "undefined") sessionStorage.setItem("matters_auth_intent", "signin");
         setIsEntering(true);
         setEntryStepText("Browser popup blocked. Redirecting to Google Sign-In directly...");
         await signInWithRedirect(auth, googleProvider);
@@ -293,9 +319,14 @@ function LoginContent() {
         setSuccessMessage(`Registration successful for ${googleUser.email}! Please click "Sign In with Google" to access your workspace.`);
       }
     } catch (err: any) {
-      if (err?.code === "auth/popup-blocked") {
+      if (
+        err?.code === "auth/popup-blocked" ||
+        err?.code === "auth/cancelled-popup-request" ||
+        err?.message?.toLowerCase().includes("popup")
+      ) {
+        if (typeof window !== "undefined") sessionStorage.setItem("matters_auth_intent", "signup");
         setIsEntering(true);
-        setEntryStepText("Browser popup blocked. Redirecting to Google Sign-In directly...");
+        setEntryStepText("Browser popup blocked. Redirecting to Google Sign-Up directly...");
         await signInWithRedirect(auth, googleProvider);
         return;
       }
