@@ -135,7 +135,7 @@ function heuristicSmartFallback(
   // 3. Contradiction & Superseding Check
   if (/\b(cancel|batal|tukar|ganti|supersede|replace|revisi|naikkan|turunkan|ubah|tak perlu|3 je)\b/i.test(lower)) {
     issues.push("superseding_instruction");
-    questions.push("Kenyataan ini mengandungi arahan pertukaran / pembatalan komitmen. Adakah ini membatalkan atau menggantikan (supersede) komitmen terdahulu?");
+    questions.push("This statement contains instructions to modify or supersede a commitment. Does this supersede an earlier commitment?");
     confidence = 0.8;
   }
 
@@ -146,7 +146,7 @@ function heuristicSmartFallback(
     validFrom = dateMatch[0];
   } else if (/\b(lusa|minggu depan|esok|nanti|hujung bulan|tomorrow|next week|later)\b/i.test(lower)) {
     issues.push("vague_timeline");
-    questions.push("Kenyataan menggunakan masa relatif. Sila sahkan tarikh kuat kuasa sebenar.");
+    questions.push("Statement uses a relative timeline. Please confirm the exact effective date.");
     confidence = Math.min(confidence, 0.7);
   }
 

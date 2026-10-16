@@ -158,7 +158,7 @@ function LoginContent() {
           setLoading(false);
           setActiveTab("signup");
           setErrorMessage(
-            "Akaun ini belum berdaftar atau telah dipadam. Sila klik 'Sign Up with Google' untuk mendaftar akaun baru."
+            "This account is not registered or was deleted. Please click 'Sign Up with Google' to register a new account."
           );
           return;
         }
@@ -240,31 +240,19 @@ function LoginContent() {
           const errMsg = (popupErr?.message || "").toLowerCase();
           const errCode = popupErr?.code || "";
 
-          // Ad-blocker or browser popup blocked: smoothly redirect directly to Google
-          if (
-            errCode === "auth/popup-blocked" ||
-            errCode === "auth/cancelled-popup-request" ||
-            errMsg.includes("popup") ||
-            errMsg.includes("blocked")
-          ) {
-            setIsEntering(true);
-            setEntryStepText("Redirecting to Google Sign-In...");
-            await signInWithRedirect(auth, googleProvider);
-            return;
-          }
-
-          if (errCode === "auth/popup-closed-by-user") {
+          // If the user deliberately dismissed the popup window, stop loading cleanly
+          if (errCode === "auth/popup-closed-by-user" || errMsg.includes("closed-by-user")) {
             setLoading(false);
             return;
           }
 
-          if (errCode === "auth/network-request-failed" || errMsg.includes("network")) {
-            throw new Error(
-              "Your Ad-Blocker blocked Google Identity services (ERR_BLOCKED_BY_CLIENT). You can pause your ad-blocker or enter immediately via 'Instant Demo Sandbox' below!"
-            );
-          }
-
-          throw popupErr;
+          // On popup-blocked, network-failed, or any adblock/cross-origin interference,
+          // smoothly fall back to first-party full-page redirect!
+          console.warn("Popup blocked or intercepted, falling back to full-page redirect:", popupErr);
+          setIsEntering(true);
+          setEntryStepText("Redirecting to Google Sign-In...");
+          await signInWithRedirect(auth, googleProvider);
+          return;
         }
       } else {
         googleUser = {

@@ -42,14 +42,14 @@ function initializeAdmin() {
 }
 
 /**
- * Sahkan Firebase ID Token daripada Authorization Header.
- * Jika tiada token dalam fasa ujian tempatan, berikan fallback identiti Hang Tuah / Demo User.
+ * Verify Firebase ID Token from Authorization Header.
+ * If no token provided in local development / testing, returns fallback identity.
  */
 export async function verifyAuthToken(
   authHeader: string | null
 ): Promise<{ uid: string; email?: string; displayName?: string }> {
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    // Mode demo / fallback untuk pembangunan tempatan & ujian sintetik
+    // Demo / fallback mode for synthetic testing
     return {
       uid: "demo_tuah_student",
       email: "tuah@student.matters.local",
@@ -80,7 +80,7 @@ export async function verifyAuthToken(
 }
 
 /**
- * Padam akaun pengguna daripada Firebase Authentication.
+ * Permanently delete user from Firebase Authentication.
  */
 export async function deleteFirebaseUser(uid: string): Promise<boolean> {
   initializeAdmin();

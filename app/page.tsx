@@ -255,7 +255,7 @@ export default function HomePage() {
         body: JSON.stringify({ oldName: oldClean, newName: newClean }),
       });
     } catch (e) {
-      console.error("Gagal mengemaskini projek:", e);
+      console.error("Failed to update project:", e);
     }
 
     const updated = userProjects.map((p) =>
@@ -297,10 +297,10 @@ export default function HomePage() {
         body: JSON.stringify({ projectName: cleanId }),
       });
     } catch (e) {
-      console.error("Gagal memadam projek dari graf:", e);
+      console.error("Failed to delete project from graph:", e);
     }
 
-    // Rekodkan projek yang dipadam dalam storage sesi supaya graf dan dropdown tapis keluar
+    // Record deleted project in session storage so graph and dropdown filter it out
     try {
       const stored = localStorage.getItem("matters_deleted_projects");
       const list: string[] = stored ? JSON.parse(stored) : [];

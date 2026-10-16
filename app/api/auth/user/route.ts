@@ -35,14 +35,14 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({
           success: false,
           alreadyRegistered: true,
-          message: "Akaun ini sudah didaftarkan sebelum ini.",
+          message: "This account is already registered.",
         });
       }
 
       await registerUser(user);
       return NextResponse.json({
         success: true,
-        message: "Pendaftaran akaun berjaya! Sila log masuk untuk mengakses workspace anda.",
+        message: "Account registered successfully! You can now access your workspace.",
       });
     }
 
