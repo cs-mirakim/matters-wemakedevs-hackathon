@@ -6,6 +6,7 @@ import {
   signInWithPopup,
   signInWithRedirect,
   getRedirectResult,
+  onAuthStateChanged,
   signOut as firebaseSignOut,
 } from "firebase/auth";
 import { auth, googleProvider } from "@/lib/firebase";
@@ -101,87 +102,117 @@ function LoginContent() {
 
   // Purge lingering session data when landing on login & prefetch dashboard for instant navigation
   useEffect(() => {
-    try {
-      localStorage.removeItem("matters_dev_user");
-      localStorage.removeItem("matters_sandbox_guest");
-      localStorage.removeItem("matters_guest_memories");
-      localStorage.removeItem("matters_reverted_memories");
-      localStorage.removeItem("matters_deleted_projects");
-    } catch {}
+    const isRedirect = typeof window !== "undefined" && sessionStorage.getItem("matters_redirect_in_progress");
+    if (!isRedirect) {
+      try {
+        localStorage.removeItem("matters_dev_user");
+        localStorage.removeItem("matters_sandbox_guest");
+        localStorage.removeItem("matters_guest_memories");
+        localStorage.removeItem("matters_reverted_memories");
+        localStorage.removeItem("matters_deleted_projects");
+      } catch {}
+    }
     try {
       router.prefetch("/");
     } catch {}
   }, [router]);
 
-  // Handle redirect result when popup is blocked by browser
+  // Unified frictionless login & auto-provisioning
+  const completeLogin = async (googleUser: any) => {
+    setIsEntering(true);
+    setEntryStepText("Verifying user account in FalkorDB Cloud...");
+
+    try {
+      // 1. Check if user is registered in FalkorDB registry
+      const checkRes = await fetch("/api/auth/user", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "check", identifier: googleUser.email }),
+      });
+      const checkData = await checkRes.json();
+
+      // 2. If not registered, auto-register immediately (zero-friction for judges and new users)
+      if (!checkData.registered) {
+        setEntryStepText("Provisioning isolated graph container on FalkorDB Cloud...");
+        await fetch("/api/auth/user", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "register",
+            user: {
+              uid: googleUser.uid,
+              email: googleUser.email,
+              displayName: googleUser.displayName || googleUser.email?.split("@")[0] || "User",
+              photoURL: googleUser.photoURL || null,
+            },
+          }),
+        });
+      }
+
+      setEntryStepText("Connecting to FalkorDB Cloud & loading workspace graph...");
+      const userProfile = {
+        uid: googleUser.uid,
+        email: googleUser.email || "",
+        displayName: googleUser.displayName || googleUser.email?.split("@")[0] || "User",
+        photoURL: googleUser.photoURL || null,
+      };
+
+      localStorage.setItem("matters_dev_user", JSON.stringify(userProfile));
+      localStorage.removeItem("matters_sandbox_guest");
+
+      if (typeof window !== "undefined") {
+        sessionStorage.removeItem("matters_auth_intent");
+        sessionStorage.removeItem("matters_redirect_in_progress");
+      }
+
+      const targetUrl = pendingInvite?.project
+        ? `/?project=${encodeURIComponent(pendingInvite.project)}`
+        : "/";
+      router.replace(targetUrl);
+    } catch (err: any) {
+      console.error("Login completion error:", err);
+      setIsEntering(false);
+      setErrorMessage(err?.message || "Failed to initialize workspace in FalkorDB. Please try again.");
+    }
+  };
+
+  // Handle redirect result & auth state when popup is blocked by ad-blocker or browser settings
   useEffect(() => {
+    let isCancelled = false;
+
     async function processRedirectAuth() {
       try {
         const result = await getRedirectResult(auth);
-        if (result && result.user) {
-          const googleUser = result.user;
-          setIsEntering(true);
-          setEntryStepText("Verifying user account in FalkorDB...");
-
-          const checkRes = await fetch("/api/auth/user", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ action: "check", identifier: googleUser.email }),
-          });
-          const checkData = await checkRes.json();
-
-          const authIntent = typeof window !== "undefined" ? sessionStorage.getItem("matters_auth_intent") : null;
-          if (typeof window !== "undefined") sessionStorage.removeItem("matters_auth_intent");
-
-          if (!checkData.registered) {
-            if (authIntent === "signup") {
-              setEntryStepText("Creating personal FalkorDB tenant graph container...");
-              await fetch("/api/auth/user", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  action: "register",
-                  user: {
-                    uid: googleUser.uid,
-                    email: googleUser.email,
-                    displayName: googleUser.displayName || googleUser.email?.split("@")[0] || "User",
-                    photoURL: googleUser.photoURL || null,
-                  },
-                }),
-              });
-            } else {
-              setIsEntering(false);
-              try { await firebaseSignOut(auth); } catch {}
-              localStorage.removeItem("matters_dev_user");
-              setErrorMessage(
-                `Google Account (${googleUser.email}) is not registered yet. Please click "Sign Up" below to create an account first.`
-              );
-              return;
-            }
-          }
-
-          setEntryStepText("Connecting to FalkorDB Cloud & loading workspace graph...");
-          const userProfile = {
-            uid: googleUser.uid,
-            email: googleUser.email || "",
-            displayName: googleUser.displayName || googleUser.email?.split("@")[0] || "User",
-            photoURL: googleUser.photoURL || null,
-          };
-          localStorage.setItem("matters_dev_user", JSON.stringify(userProfile));
-          localStorage.removeItem("matters_sandbox_guest");
-          const targetUrl = pendingInvite?.project
-            ? `/?project=${encodeURIComponent(pendingInvite.project)}`
-            : "/";
-          router.push(targetUrl);
+        if (result && result.user && !isCancelled) {
+          await completeLogin(result.user);
+          return;
         }
       } catch (err: any) {
-        console.warn("Redirect sign-in notice:", err);
+        console.warn("getRedirectResult notice:", err);
+      }
+
+      // Also listen to onAuthStateChanged if redirect was initiated
+      const isRedirectInProgress =
+        typeof window !== "undefined" && sessionStorage.getItem("matters_redirect_in_progress");
+      if (isRedirectInProgress) {
+        const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+          if (firebaseUser && !isCancelled) {
+            if (typeof window !== "undefined") {
+              sessionStorage.removeItem("matters_redirect_in_progress");
+            }
+            await completeLogin(firebaseUser);
+          }
+        });
+        return () => unsubscribe();
       }
     }
+
     processRedirectAuth();
+
+    return () => {
+      isCancelled = true;
+    };
   }, [pendingInvite, router]);
-
-
 
   const handleGoogleSignIn = async () => {
     setLoading(true);
@@ -195,9 +226,43 @@ function LoginContent() {
         process.env.NEXT_PUBLIC_FIREBASE_API_KEY &&
         process.env.NEXT_PUBLIC_FIREBASE_API_KEY !== "AIzaSyDummyKeyForDevelopment"
       ) {
-        // Open Google popup first - do not show modal yet so user chooses email cleanly
-        const result = await signInWithPopup(auth, googleProvider);
-        googleUser = result.user;
+        try {
+          const result = await signInWithPopup(auth, googleProvider);
+          googleUser = result.user;
+        } catch (popupErr: any) {
+          const errMsg = (popupErr?.message || "").toLowerCase();
+          const errCode = popupErr?.code || "";
+
+          // Ad-blocker or browser popup blocked: smoothly redirect directly to Google
+          if (
+            errCode === "auth/popup-blocked" ||
+            errCode === "auth/cancelled-popup-request" ||
+            errMsg.includes("popup") ||
+            errMsg.includes("blocked")
+          ) {
+            if (typeof window !== "undefined") {
+              sessionStorage.setItem("matters_auth_intent", "signin");
+              sessionStorage.setItem("matters_redirect_in_progress", "true");
+            }
+            setIsEntering(true);
+            setEntryStepText("Browser popup blocked by ad-blocker. Redirecting directly to Google Sign-In...");
+            await signInWithRedirect(auth, googleProvider);
+            return;
+          }
+
+          if (errCode === "auth/popup-closed-by-user") {
+            setLoading(false);
+            return;
+          }
+
+          if (errCode === "auth/network-request-failed" || errMsg.includes("network")) {
+            throw new Error(
+              "Your Ad-Blocker blocked Google Identity services (ERR_BLOCKED_BY_CLIENT). You can pause your ad-blocker or enter immediately via 'Instant Demo Sandbox' below!"
+            );
+          }
+
+          throw popupErr;
+        }
       } else {
         googleUser = {
           uid: "google_verified_user_01",
@@ -207,58 +272,11 @@ function LoginContent() {
         };
       }
 
-      // Show full-screen loading modal AFTER email has been chosen
-      setIsEntering(true);
-      setEntryStepText("Verifying user account in FalkorDB...");
-
-      // Check if user is registered
-      const checkRes = await fetch("/api/auth/user", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "check", identifier: googleUser.email }),
-      });
-      const checkData = await checkRes.json();
-
-      if (!checkData.registered) {
-        setIsEntering(false);
-        try {
-          await firebaseSignOut(auth);
-        } catch {}
-        localStorage.removeItem("matters_dev_user");
-        setErrorMessage(
-          `Google Account (${googleUser.email}) is not registered yet. Please click "Sign Up" below to create an account first.`
-        );
-        return;
+      if (googleUser) {
+        await completeLogin(googleUser);
       }
-
-      setEntryStepText("Connecting to FalkorDB Cloud & loading workspace graph...");
-
-      const userProfile = {
-        uid: googleUser.uid,
-        email: googleUser.email || "",
-        displayName: googleUser.displayName || googleUser.email?.split("@")[0] || "User",
-        photoURL: googleUser.photoURL || null,
-      };
-      localStorage.setItem("matters_dev_user", JSON.stringify(userProfile));
-      localStorage.removeItem("matters_sandbox_guest");
-      const targetUrl = pendingInvite?.project
-        ? `/?project=${encodeURIComponent(pendingInvite.project)}`
-        : "/";
-      router.push(targetUrl);
     } catch (err: any) {
-      if (
-        err?.code === "auth/popup-blocked" ||
-        err?.code === "auth/cancelled-popup-request" ||
-        err?.message?.toLowerCase().includes("popup")
-      ) {
-        if (typeof window !== "undefined") sessionStorage.setItem("matters_auth_intent", "signin");
-        setIsEntering(true);
-        setEntryStepText("Browser popup blocked. Redirecting to Google Sign-In directly...");
-        await signInWithRedirect(auth, googleProvider);
-        return;
-      }
       setIsEntering(false);
-      if (err?.code === "auth/popup-closed-by-user") return;
       console.warn("Google sign-in notice:", err);
       setErrorMessage(err?.message || "Google sign-in was interrupted. Please try again.");
     } finally {
@@ -267,75 +285,8 @@ function LoginContent() {
   };
 
   const handleGoogleSignUp = async () => {
-    setLoading(true);
-    setErrorMessage(null);
-    setSuccessMessage(null);
-
-    try {
-      let googleUser: any = null;
-
-      if (
-        process.env.NEXT_PUBLIC_FIREBASE_API_KEY &&
-        process.env.NEXT_PUBLIC_FIREBASE_API_KEY !== "AIzaSyDummyKeyForDevelopment"
-      ) {
-        const result = await signInWithPopup(auth, googleProvider);
-        googleUser = result.user;
-      } else {
-        googleUser = {
-          uid: "google_verified_user_01",
-          email: "user@matters.ai",
-          displayName: "Amir Hakim",
-          photoURL: null,
-        };
-      }
-
-      // Register user in system registry
-      const regRes = await fetch("/api/auth/user", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "register",
-          user: {
-            uid: googleUser.uid,
-            email: googleUser.email || "",
-            displayName: googleUser.displayName || googleUser.email?.split("@")[0] || "User",
-            photoURL: googleUser.photoURL || null,
-          },
-        }),
-      });
-      const regData = await regRes.json();
-
-      // Sign out from Firebase immediately so user does NOT auto-login
-      try {
-        await firebaseSignOut(auth);
-      } catch {}
-      localStorage.removeItem("matters_dev_user");
-
-      if (regData.alreadyRegistered) {
-        setActiveTab("signin");
-        setSuccessMessage(`Account (${googleUser.email}) is already registered. Please proceed to Sign In.`);
-      } else {
-        setActiveTab("signin");
-        setSuccessMessage(`Registration successful for ${googleUser.email}! Please click "Sign In with Google" to access your workspace.`);
-      }
-    } catch (err: any) {
-      if (
-        err?.code === "auth/popup-blocked" ||
-        err?.code === "auth/cancelled-popup-request" ||
-        err?.message?.toLowerCase().includes("popup")
-      ) {
-        if (typeof window !== "undefined") sessionStorage.setItem("matters_auth_intent", "signup");
-        setIsEntering(true);
-        setEntryStepText("Browser popup blocked. Redirecting to Google Sign-Up directly...");
-        await signInWithRedirect(auth, googleProvider);
-        return;
-      }
-      if (err?.code === "auth/popup-closed-by-user") return;
-      console.warn("Google sign-up notice:", err);
-      setErrorMessage(err?.message || "Google sign-up was interrupted. Please try again.");
-    } finally {
-      setLoading(false);
-    }
+    // Both sign-in and sign-up invoke the same frictionless auto-provisioning flow
+    await handleGoogleSignIn();
   };
 
   const handleContinueAsGuest = () => {
@@ -474,8 +425,24 @@ function LoginContent() {
               <div className="mb-5 p-3.5 rounded-[12px] bg-red-50 border border-red-200 text-red-800 text-[12.5px] flex items-start gap-2.5 shadow-2xs">
                 <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
                 <div className="flex-1">
-                  <p className="font-semibold text-red-900">Access Denied</p>
-                  <p className="mt-0.5">{errorMessage}</p>
+                  <p className="font-semibold text-red-900">Sign-In Notice</p>
+                  <p className="mt-0.5 leading-relaxed">{errorMessage}</p>
+                  <div className="mt-2.5 flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleContinueAsGuest}
+                      className="px-2.5 py-1 text-xs font-semibold rounded-md bg-blue-600 text-white hover:bg-blue-700 transition cursor-pointer"
+                    >
+                      Instant Demo Sandbox (4 Personas)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setErrorMessage(null)}
+                      className="px-2 py-1 text-xs text-slate-600 hover:text-slate-900 cursor-pointer"
+                    >
+                      Dismiss
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
