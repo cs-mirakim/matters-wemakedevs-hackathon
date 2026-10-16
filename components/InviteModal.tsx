@@ -30,8 +30,13 @@ export default function InviteModal({
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [role, setRole] = useState("editor");
-  const [assignedProject, setAssignedProject] = useState(selectedProject || "all");
+  const [isAllWorkspace, setIsAllWorkspace] = useState(selectedProject === "all");
+  const [chosenProjects, setChosenProjects] = useState<string[]>(() => {
+    return selectedProject && selectedProject !== "all" ? [selectedProject] : [];
+  });
   const [copied, setCopied] = useState(false);
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
+  const [emailStatusMessage, setEmailStatusMessage] = useState<string | null>(null);
   const [invitedList, setInvitedList] = useState<Array<{ name: string; email: string; role: string; project: string }>>([
     { name: "You (Owner)", email: "owner@workspace.local", role: "admin", project: "All Projects" }
   ]);
@@ -39,8 +44,13 @@ export default function InviteModal({
 
   if (!isOpen) return null;
 
+  const resolvedProjectNames = isAllWorkspace || chosenProjects.length === 0
+    ? "All Projects"
+    : chosenProjects.join(", ");
+
   const currentOrigin = typeof window !== "undefined" ? window.location.origin : "https://matters.ai";
-  const inviteLink = `${currentOrigin}/login?inviteProject=${encodeURIComponent(assignedProject)}&inviter=${encodeURIComponent(workspaceName)}`;
+  const primaryProjectParam = chosenProjects[0] || "all";
+  const inviteLink = `${currentOrigin}/login?inviteProject=${encodeURIComponent(primaryProjectParam)}&inviter=${encodeURIComponent(workspaceName)}`;
 
   const handleCopyLink = () => {
     navigator.clipboard.writeText(inviteLink);
@@ -48,33 +58,66 @@ export default function InviteModal({
     setTimeout(() => setCopied(false), 2000);
   };
 
-
-  const handleSendInvite = (e: React.FormEvent) => {
+  const handleSendInvite = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email) return;
 
     const memberName = name.trim() || email.split("@")[0];
-    const targetProjectName = projects.find((p) => p.id === assignedProject)?.name || "All Projects";
+    const targetProjectsList = isAllWorkspace || chosenProjects.length === 0
+      ? projects.filter((p) => p.id !== "all").map((p) => p.id)
+      : chosenProjects;
 
     setInvitedList((prev) => [
       ...prev,
-      { name: memberName, email, role, project: targetProjectName },
+      { name: memberName, email, role, project: resolvedProjectNames },
     ]);
+
+    // Send real invitation email via Gmail SMTP
+    setIsSendingEmail(true);
+    setEmailStatusMessage("Sending invitation email via Gmail...");
+    try {
+      const res = await fetch("/api/invite/email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          to: email,
+          inviterName: workspaceName,
+          workspaceName,
+          projectName: resolvedProjectNames,
+          role,
+          inviteLink,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setEmailStatusMessage(`Invitation email sent to ${email}!`);
+      } else {
+        setEmailStatusMessage(`Notice: ${data.message || "Email delivery queued"}`);
+      }
+    } catch {
+      setEmailStatusMessage(`Link ready to share: ${inviteLink}`);
+    } finally {
+      setIsSendingEmail(false);
+    }
 
     if (onInviteMember) {
       onInviteMember({
         name: memberName,
         email,
         role,
-        projectId: assignedProject,
+        projectId: primaryProjectParam,
       });
     }
 
     setName("");
     setEmail("");
     setJustInvitedSuccess(true);
-    setTimeout(() => setJustInvitedSuccess(false), 3000);
+    setTimeout(() => {
+      setJustInvitedSuccess(false);
+      setEmailStatusMessage(null);
+    }, 4000);
   };
+
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-150">
@@ -107,28 +150,47 @@ export default function InviteModal({
         <div className="p-5 space-y-4">
           {/* Sandbox Demo Scenario Banner */}
           {isGuest && (
-            <div className="p-3 rounded-[8px] bg-amber-50 border border-amber-200/80 text-[11.5px] space-y-2">
+            <div className="p-3.5 rounded-[10px] bg-gradient-to-r from-amber-50 to-orange-50/60 border border-amber-200 text-[11.5px] space-y-2.5">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5 font-semibold text-amber-900">
+                <div className="flex items-center gap-1.5 font-semibold text-amber-950">
                   <Sparkles className="w-3.5 h-3.5 text-amber-600" />
                   <span>Sandbox Live Demo: 1-Click Teammate Simulation</span>
                 </div>
-                <span className="text-[10px] uppercase font-mono px-1.5 py-0.5 rounded bg-amber-200/70 text-amber-900 font-bold">
+                <span className="text-[10px] uppercase font-mono px-1.5 py-0.5 rounded bg-amber-200/80 text-amber-900 font-bold">
                   Demo Mode
                 </span>
               </div>
               <p className="text-amber-800 leading-relaxed text-[11px]">
-                Showcase collaborative graph onboarding to judges without waiting for email confirmations.
+                Instantly simulate onboarding <strong>Dr. Sofia (Security Auditor Agent)</strong> into your selected project graph(s) below without waiting for real email confirmations.
               </p>
               <div className="flex flex-wrap gap-2 pt-0.5">
                 <button
                   type="button"
                   onClick={() => {
+                    const targetProjectsList = isAllWorkspace || chosenProjects.length === 0
+                      ? projects.filter((p) => p.id !== "all").map((p) => p.id)
+                      : chosenProjects;
+
+                    try {
+                      const existing = JSON.parse(localStorage.getItem("matters_sandbox_collaborators") || "[]");
+                      const filtered = existing.filter((c: any) => !c.name?.toLowerCase().includes("sofia"));
+                      const updated = [
+                        ...filtered,
+                        {
+                          name: "Dr. Sofia",
+                          email: "sofia.security@matters.ai",
+                          role: "Security Auditor (Agent)",
+                          projects: targetProjectsList,
+                        },
+                      ];
+                      localStorage.setItem("matters_sandbox_collaborators", JSON.stringify(updated));
+                    } catch {}
+
                     const demoMember = {
                       name: "Dr. Sofia",
                       email: "sofia.security@matters.ai",
-                      role: "security agent",
-                      project: projects.find((p) => p.id === assignedProject)?.name || "Innovation Studio Portal",
+                      role: "Security Auditor (Agent)",
+                      project: targetProjectsList.join(", "),
                     };
                     setInvitedList((prev) => [demoMember, ...prev]);
                     if (onInviteMember) {
@@ -136,7 +198,7 @@ export default function InviteModal({
                         name: demoMember.name,
                         email: demoMember.email,
                         role: demoMember.role,
-                        projectId: assignedProject,
+                        projectId: targetProjectsList[0] || "all",
                       });
                     }
                     setJustInvitedSuccess(true);
@@ -152,8 +214,7 @@ export default function InviteModal({
           )}
 
           {/* Email Invite Form with Project Scope Selector */}
-          <form onSubmit={handleSendInvite} className="space-y-3">
-
+          <form onSubmit={handleSendInvite} className="space-y-3.5">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
               <div>
                 <label className="block text-[11px] font-semibold uppercase tracking-wider text-muted mb-1">
@@ -161,7 +222,7 @@ export default function InviteModal({
                 </label>
                 <input
                   type="text"
-                  placeholder="e.g. Sarah, Alex, Client Rep"
+                  placeholder="e.g. Dr. Sofia, Alex, QA Auditor"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   className="w-full px-3 py-2 text-[12.5px] rounded-[8px] border border-border bg-white focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition"
@@ -183,27 +244,65 @@ export default function InviteModal({
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-              <div>
-                <label className="block text-[11px] font-semibold uppercase tracking-wider text-muted mb-1">
-                  Project Scope Access
+            {/* Project Scope Checkboxes (Allow All, 1, or Multi-select) */}
+            <div className="p-3 rounded-[8px] border border-border bg-[#F8F9FB] space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="block text-[11px] font-semibold uppercase tracking-wider text-muted">
+                  Project Scope Access (Multi-select)
                 </label>
-                <select
-                  value={assignedProject}
-                  onChange={(e) => setAssignedProject(e.target.value)}
-                  className="w-full px-2.5 py-2 text-[12px] font-medium rounded-[8px] border border-border bg-subtle text-foreground focus:outline-none focus:border-primary cursor-pointer"
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAllWorkspace(!isAllWorkspace);
+                    if (!isAllWorkspace) setChosenProjects([]);
+                  }}
+                  className={`text-[11px] font-medium px-2 py-0.5 rounded border transition cursor-pointer ${
+                    isAllWorkspace
+                      ? "bg-primary text-white border-primary"
+                      : "bg-white text-muted border-border hover:text-foreground"
+                  }`}
                 >
-                  <option value="all">🌐 All Projects in Workspace</option>
-                  {projects
-                    .filter((p) => p.id !== "all")
-                    .map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name}
-                      </option>
-                    ))}
-                </select>
+                  🌐 All Workspace Projects
+                </button>
               </div>
 
+              {!isAllWorkspace && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                  {projects
+                    .filter((p) => p.id !== "all")
+                    .map((p) => {
+                      const isChecked = chosenProjects.includes(p.id);
+                      return (
+                        <label
+                          key={p.id}
+                          className={`flex items-center gap-2 p-2 rounded-[6px] border text-[11.5px] font-medium cursor-pointer transition ${
+                            isChecked
+                              ? "bg-primary-soft/40 border-primary text-primary"
+                              : "bg-white border-border text-foreground hover:bg-subtle"
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setChosenProjects((prev) => [...prev, p.id]);
+                              } else {
+                                setChosenProjects((prev) => prev.filter((id) => id !== p.id));
+                              }
+                            }}
+                            className="rounded border-border text-primary focus:ring-0 cursor-pointer"
+                          />
+                          <span className="truncate">{p.name}</span>
+                        </label>
+                      );
+                    })}
+                </div>
+              )}
+            </div>
+
+            {/* Role Selection & Submit Button */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 items-end">
               <div>
                 <label className="block text-[11px] font-semibold uppercase tracking-wider text-muted mb-1">
                   Role Assignment
@@ -211,31 +310,26 @@ export default function InviteModal({
                 <select
                   value={role}
                   onChange={(e) => setRole(e.target.value)}
-                  className="w-full px-2.5 py-2 text-[12px] rounded-[8px] border border-border bg-subtle text-foreground focus:outline-none focus:border-primary cursor-pointer"
+                  className="w-full px-2.5 py-2 text-[12px] rounded-[8px] border border-border bg-white text-foreground focus:outline-none focus:border-primary cursor-pointer"
                 >
                   <option value="editor">Editor (Can Commit Commitments)</option>
                   <option value="viewer">Viewer (Read-Only Access)</option>
                   <option value="lead">Project Lead / Manager</option>
-                  <option value="agent">Autonomous AI Agent</option>
+                  <option value="agent">Autonomous AI Agent (Security / QA)</option>
                 </select>
               </div>
-            </div>
 
-            <div className="flex items-center justify-between pt-1">
-              <span className="text-[11px] text-muted">
-                {assignedProject === "all"
-                  ? "Will have graph visibility across all workspace projects."
-                  : "Scoped strictly to the selected project graph."}
-              </span>
               <button
                 type="submit"
-                disabled={!email}
-                className="px-4 py-2 text-[12.5px] font-medium text-white bg-primary hover:bg-primary-hover disabled:opacity-50 disabled:cursor-not-allowed rounded-[8px] transition shadow-sm shrink-0"
+                disabled={!email || isSendingEmail}
+                className="w-full py-2 text-[12.5px] font-medium text-white bg-primary hover:bg-primary-hover disabled:opacity-50 disabled:cursor-not-allowed rounded-[8px] transition shadow-sm flex items-center justify-center gap-2 cursor-pointer"
               >
-                Send Invite
+                <Mail className="w-3.5 h-3.5" />
+                <span>{isSendingEmail ? "Sending via Gmail..." : "Send Gmail Invite"}</span>
               </button>
             </div>
           </form>
+
 
           {justInvitedSuccess && (
             <div className="p-2.5 rounded-[8px] bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11.5px] flex items-center gap-2 animate-in fade-in">

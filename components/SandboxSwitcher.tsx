@@ -1,7 +1,7 @@
 "use client";
 
-import React from "react";
-import { GraduationCap, Briefcase, Hammer, User, Check, Sparkles } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { GraduationCap, Briefcase, Hammer, User, Check, Sparkles, ShieldCheck, RotateCcw } from "lucide-react";
 
 export interface PersonaProfile {
   id: string;
@@ -45,17 +45,46 @@ export const PERSONAS: Record<string, PersonaProfile> = {
     bio: "Infrastructure contractor managing low-latency FalkorDB cloud clusters, automated snapshots, and uptime SLAs.",
     badge: "Infra SLA",
   },
+  sofia: {
+    id: "sofia",
+    name: "Dr. Sofia",
+    role: "Security Auditor (Agent)",
+    subtitle: "Compliance & FalkorDB Audits",
+    bio: "Autonomous AI security agent performing penetration audits, access control checks, and zero-trust verification on FalkorDB multi-tenant graphs.",
+    badge: "Security Agent",
+  },
 };
 
 interface SandboxSwitcherProps {
   currentPersona: string;
   onSelectPersona: (personaId: string) => void;
+  onResetSandbox?: () => void;
 }
 
 export default function SandboxSwitcher({
   currentPersona,
   onSelectPersona,
+  onResetSandbox,
 }: SandboxSwitcherProps) {
+  const [hasSofia, setHasSofia] = useState(false);
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("matters_sandbox_collaborators");
+      if (stored) {
+        const list = JSON.parse(stored);
+        if (Array.isArray(list) && list.some((c: any) => c.name?.toLowerCase().includes("sofia"))) {
+          setHasSofia(true);
+        }
+      }
+    } catch {}
+  }, [currentPersona]);
+
+  const activePersonaList = Object.values(PERSONAS).filter((p) => {
+    if (p.id === "sofia") return hasSofia || currentPersona === "sofia";
+    return true;
+  });
+
   const getIcon = (id: string) => {
     switch (id) {
       case "aris":
@@ -66,6 +95,8 @@ export default function SandboxSwitcher({
         return <Briefcase className="w-4 h-4 text-pink-600" />;
       case "cempaka":
         return <Hammer className="w-4 h-4 text-amber-600" />;
+      case "sofia":
+        return <ShieldCheck className="w-4 h-4 text-emerald-600" />;
       default:
         return <User className="w-4 h-4 text-muted" />;
     }
@@ -81,7 +112,7 @@ export default function SandboxSwitcher({
           <div>
             <div className="flex items-center gap-2">
               <h3 className="text-[13px] font-semibold text-foreground tracking-tight">
-                Guest Sandbox Personas (4 Synthetic Personas)
+                Guest Sandbox Personas ({activePersonaList.length} Active Personas)
               </h3>
               <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 border border-blue-200 font-semibold">
                 Select Persona
@@ -92,10 +123,22 @@ export default function SandboxSwitcher({
             </p>
           </div>
         </div>
+
+        {onResetSandbox && (
+          <button
+            type="button"
+            onClick={onResetSandbox}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[11.5px] font-medium text-red-700 bg-red-50 hover:bg-red-100/80 border border-red-200/80 rounded-[8px] transition active:scale-95 cursor-pointer shadow-2xs self-start sm:self-center shrink-0"
+            title="Reset sandbox state, clear simulated collaborators, and restore default personas"
+          >
+            <RotateCcw className="w-3.5 h-3.5 text-red-600" />
+            <span>Reset Sandbox</span>
+          </button>
+        )}
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-        {Object.values(PERSONAS).map((p) => {
+      <div className={`grid grid-cols-1 sm:grid-cols-2 ${activePersonaList.length >= 5 ? "lg:grid-cols-5" : "lg:grid-cols-4"} gap-3`}>
+        {activePersonaList.map((p) => {
           const isSelected = currentPersona === p.id;
           return (
             <button
@@ -149,7 +192,7 @@ export default function SandboxSwitcher({
               {isSelected && (
                 <div className="mt-2.5 pt-2 border-t border-primary/20 flex items-center gap-1.5 text-[10.5px] font-medium text-primary">
                   <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
-                  <span>Workspace Aktif</span>
+                  <span>Active Workspace</span>
                 </div>
               )}
             </button>
@@ -159,3 +202,4 @@ export default function SandboxSwitcher({
     </div>
   );
 }
+

@@ -7,7 +7,7 @@
 ---
 
 ## 🌐 Live Submission Links
-* **Live Web App:** [https://matters.vercel.app](https://matters.vercel.app) *(or your deployed Vercel domain)*
+* **Live Web App:** [https://matters-wemakedevs-hackathon.vercel.app](https://matters-wemakedevs-hackathon.vercel.app)
 * **3-Minute Demo Video:** [https://youtu.be/DEMO_VIDEO_LINK](https://youtu.be/DEMO_VIDEO_LINK) *(YouTube / Loom / Google Drive)*
 * **GitHub Repository:** [https://github.com/cs-mirakim/matters-wemakedevs-hackathon](https://github.com/cs-mirakim/matters-wemakedevs-hackathon)
 

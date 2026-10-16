@@ -82,7 +82,29 @@ export default function LiveDemoStoryboard({
       },
       explanation: "Transitions single-node Redis hosting into high-availability FalkorDB cluster with snapshot failover.",
     },
+    {
+      id: "scenario_sofia",
+      icon: "🛡️",
+      title: "4. Security Audit",
+      person: "Dr. Sofia (Security Agent)",
+      actionLabel: "Approve Graph Isolation",
+      tag: "Agent Audit Verified",
+      date: "2026-08-26",
+      project: "Agent Memory Core",
+      data: {
+        personName: "Dr. Sofia",
+        personType: "security agent",
+        memoryType: "Decision",
+        project: "Agent Memory Core",
+        validFrom: "2026-08-26",
+        amount: null,
+        confidence: 0.99,
+        text: "Completed zero-trust penetration testing on FalkorDB tenant isolation and verified ISO-27001 compliance for Q4.",
+      },
+      explanation: "Autonomous security agent commits compliance audit into the graph, demonstrating multi-agent coordination.",
+    },
   ];
+
 
   const handleRunScenario = async (sc: typeof SCENARIOS[0]) => {
     if (isRunning) return;
@@ -91,7 +113,23 @@ export default function LiveDemoStoryboard({
     setFeedbackMsg(`Executing ${sc.title}...`);
 
     try {
+      if (sc.id === "scenario_sofia") {
+        try {
+          const existing = JSON.parse(localStorage.getItem("matters_sandbox_collaborators") || "[]");
+          if (!existing.some((c: any) => c.name?.toLowerCase().includes("sofia"))) {
+            existing.push({
+              name: "Dr. Sofia",
+              email: "sofia.security@matters.ai",
+              role: "Security Auditor (Agent)",
+              projects: ["Agent Memory Core", "Innovation Studio Portal", "FalkorDB Clusters & SLA"],
+            });
+            localStorage.setItem("matters_sandbox_collaborators", JSON.stringify(existing));
+          }
+        } catch {}
+      }
+
       const sourceId = `demo_${sc.id}_${Date.now()}`;
+
       const payload = {
         text: sc.data.text,
         project: sc.project,
@@ -208,8 +246,8 @@ export default function LiveDemoStoryboard({
         )}
       </div>
 
-      {/* 3 Interactive Scenario Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
+      {/* 4 Interactive Scenario Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
         {SCENARIOS.map((sc) => {
           const isSelected = activeScenarioId === sc.id;
           return (

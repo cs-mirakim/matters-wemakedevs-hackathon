@@ -82,6 +82,10 @@ export default function MemoryGraph({
           if (revertedMems) {
             headers["x-reverted-memories"] = encodeURIComponent(revertedMems);
           }
+          const guestCollabs = localStorage.getItem("matters_sandbox_collaborators");
+          if (guestCollabs) {
+            headers["x-guest-collaborators"] = encodeURIComponent(guestCollabs);
+          }
         } catch {}
       } else {
         let authHeader = `Bearer demo_user_session`;
@@ -100,7 +104,15 @@ export default function MemoryGraph({
         if (currentUser?.displayName) {
           headers["x-user-display-name"] = encodeURIComponent(currentUser.displayName);
         }
+        try {
+          const uProjKey = `matters_projects_${currentUser?.uid}`;
+          const userProjs = localStorage.getItem(uProjKey);
+          if (userProjs) {
+            headers["x-user-projects"] = encodeURIComponent(userProjs);
+          }
+        } catch {}
       }
+
 
       const queryParams = new URLSearchParams({
         project: selectedProject,

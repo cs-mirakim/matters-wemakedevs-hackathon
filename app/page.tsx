@@ -573,7 +573,7 @@ export default function HomePage() {
           onExitSandbox={() => setIsExitSandboxOpen(true)}
         />
 
-        {/* Synthetic Sandbox 4-Persona Switcher (Guest Mode only) */}
+        {/* Synthetic Sandbox Persona Switcher (Guest Mode only) */}
         {isGuest && (
           <SandboxSwitcher
             currentPersona={selectedPersona}
@@ -585,9 +585,22 @@ export default function HomePage() {
               }
               setRefreshTrigger((prev) => prev + 1);
             }}
+            onResetSandbox={() => {
+              try {
+                localStorage.removeItem("matters_guest_memories");
+                localStorage.removeItem("matters_reverted_memories");
+                localStorage.removeItem("matters_deleted_projects");
+                localStorage.removeItem("matters_sandbox_collaborators");
+              } catch {}
+              setSelectedPersona("aris");
+              setSelectedProject("all");
+              setSelectedMemory(null);
+              setAsOfDate("2026-08-15");
+              setRefreshTrigger((prev) => prev + 1);
+            }}
           />
-
         )}
+
 
         {/* Live Interactive Demo Storyboard (1-Click Fail-Proof Judges Showcase) */}
         <LiveDemoStoryboard

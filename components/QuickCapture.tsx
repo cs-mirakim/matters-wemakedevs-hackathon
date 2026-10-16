@@ -30,21 +30,27 @@ interface QuickCaptureProps {
 
 const REAL_PROMPT_TEMPLATES = [
   {
-    title: "FYP Ethics (Madam Gee)",
-    text: "madam gee suruh isi 4 borang ethics & buat 1 consent letter untuk FYP",
-    project: "FYP",
+    title: "Director Mandate",
+    text: "Prof. Aris mandated bi-temporal graph memory benchmarks and automated Cypher telemetry.",
+    project: "Innovation Studio Portal",
   },
   {
-    title: "FYP Revision (Madam Fauziah)",
-    text: "madam fauziah suruh isi 3 je borang ethics + buat 1 consent letter... borang ketiga tak perlu",
-    project: "FYP",
+    title: "Design System",
+    text: "Mawar committed to deliver 8 responsive viewport mockups and interactive time-travel slider for RM850.",
+    project: "Innovation Studio Portal",
   },
   {
     title: "Contractor SLA",
     text: "Cempaka committed to low-latency cluster migration with 99.9% uptime SLA by Friday.",
     project: "FalkorDB Clusters & SLA",
   },
+  {
+    title: "Security Agent",
+    text: "Dr. Sofia completed zero-trust penetration testing on FalkorDB tenant isolation and verified ISO-27001 compliance.",
+    project: "Agent Memory Core",
+  },
 ];
+
 
 export default function QuickCapture({
   currentUser = null,

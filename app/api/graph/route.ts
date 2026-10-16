@@ -27,12 +27,13 @@ const PROJECTS_CYPHER = `
   LIMIT 50
 `;
 
-// 4 Synthetic Personas Ecosystem for Guest Sandbox Mode
+// Synthetic Personas Ecosystem for Guest Sandbox Mode
 const PERSONA_NAMES: Record<string, string> = {
   aris: "Prof. Aris",
   melati: "Melati",
   mawar: "Mawar",
   cempaka: "Cempaka",
+  sofia: "Dr. Sofia",
 };
 
 const PROJECT_METADATA: Record<
@@ -61,7 +62,9 @@ const PERSONA_PROJECT_MAP: Record<string, string[]> = {
   melati: ["Agent Memory Core", "Innovation Studio Portal"],
   mawar: ["Innovation Studio Portal"],
   cempaka: ["FalkorDB Clusters & SLA"],
+  sofia: ["Innovation Studio Portal", "Agent Memory Core", "FalkorDB Clusters & SLA"],
 };
+
 
 const SANDBOX_DEMO_RECORDS = [
   // --- Prof. Aris (Project Director) ---
@@ -401,8 +404,41 @@ export async function GET(req: NextRequest) {
     const nodes: any[] = [];
     const edges: any[] = [];
 
-    // Group records by Project and Person
+    // Parse simulated/invited collaborators from client header
+    const guestCollaboratorsHeader = req.headers.get("x-guest-collaborators");
+    let guestCollaborators: Array<{ name: string; email: string; role: string; projects: string[] }> = [];
+    if (guestCollaboratorsHeader) {
+      try {
+        const parsed = JSON.parse(decodeURIComponent(guestCollaboratorsHeader));
+        if (Array.isArray(parsed)) guestCollaborators = parsed;
+      } catch {}
+    }
+
+    // Parse user-created projects from header
+    const userProjectsHeader = req.headers.get("x-user-projects");
+    if (userProjectsHeader) {
+      try {
+        const parsed = JSON.parse(decodeURIComponent(userProjectsHeader));
+        if (Array.isArray(parsed)) {
+          parsed.forEach((p: any) => {
+            const clean = cleanProjectName(typeof p === "string" ? p : p.id || p.name);
+            if (clean && !isAllProject(clean) && !distinctProjects.includes(clean)) {
+              distinctProjects.push(clean);
+            }
+          });
+        }
+      } catch {}
+    }
+
+    // Group records by Project and Person (including empty projects!)
     const projectsMap = new Map<string, any[]>();
+    for (const proj of distinctProjects) {
+      if (requestedProject && !isAllProject(requestedProject)) {
+        if (cleanProjectName(proj).toLowerCase() !== cleanProjectName(requestedProject).toLowerCase()) continue;
+      }
+      projectsMap.set(proj, []);
+    }
+
     for (const rec of filtered) {
       const pName = rec.project || "General";
       if (!projectsMap.has(pName)) projectsMap.set(pName, []);
@@ -416,17 +452,42 @@ export async function GET(req: NextRequest) {
     projectNames.forEach((projName) => {
       const projRecords = projectsMap.get(projName)!;
       const peopleInProj = new Map<string, any[]>();
+
+      // 1. People with recorded memories
       for (const rec of projRecords) {
         const pPerson = rec.personName || "Collaborator";
         if (!peopleInProj.has(pPerson)) peopleInProj.set(pPerson, []);
         peopleInProj.get(pPerson)!.push(rec);
       }
+
+      // 2. Default project owner or current user if empty
+      const rawMeta = isGuest ? PROJECT_METADATA[projName] : null;
+      if (rawMeta?.owner && !peopleInProj.has(rawMeta.owner)) {
+        peopleInProj.set(rawMeta.owner, []);
+      }
+      if (!isGuest && userName && !peopleInProj.has(userName)) {
+        peopleInProj.set(userName, []);
+      }
+
+      // 3. Simulated/invited collaborators assigned to this project
+      guestCollaborators.forEach((collab) => {
+        const collabProjs = Array.isArray(collab.projects)
+          ? collab.projects.map((p) => cleanProjectName(p).toLowerCase())
+          : [];
+        const isAssigned =
+          collabProjs.length === 0 ||
+          collabProjs.includes("all") ||
+          collabProjs.includes(cleanProjectName(projName).toLowerCase());
+
+        if (isAssigned && !peopleInProj.has(collab.name)) {
+          peopleInProj.set(collab.name, []);
+        }
+      });
+
       projectPeopleMap.set(projName, peopleInProj);
     });
 
     // Dynamic width calculation to ensure NO nodes or sub-trees ever overlap
-    // Each person column requires 280px (220px card + 60px breathing space)
-    // Between adjacent project subtrees, add a 120px gutter buffer
     const PERSON_COL_WIDTH = 280;
     const PROJECT_GUTTER = 120;
 
@@ -456,7 +517,7 @@ export async function GET(req: NextRequest) {
       },
     });
 
-    if (filtered.length === 0) {
+    if (projectNames.length === 0) {
       return NextResponse.json({
         success: true,
         data: {
@@ -470,6 +531,7 @@ export async function GET(req: NextRequest) {
         },
       });
     }
+
 
     let currentProjectLeftX = globalStartX;
 
@@ -532,23 +594,32 @@ export async function GET(req: NextRequest) {
           isGuest &&
           personName.toLowerCase().includes(activePersonaName.toLowerCase().replace("prof. ", ""));
 
+        const collabInfo = guestCollaborators.find(
+          (c) => c.name.toLowerCase() === personName.toLowerCase()
+        );
+
         const isOwner =
           personName.toLowerCase() === meta.owner.toLowerCase() ||
           (!isGuest && personName.toLowerCase() === (userName || "").toLowerCase());
-        const roleDescription = isOwner
+        const roleDescription = collabInfo
+          ? collabInfo.role
+          : isOwner
           ? `Owner • ${meta.ownerRole || "Lead"}`
           : `Contributor`;
 
         const otherContributors = meta.contributors.filter(
           (c) => c.toLowerCase() !== personName.toLowerCase()
         );
-        const personSubtitle = isOwner
-          ? meta.contributors.length > 0
-            ? `Contributors: ${meta.contributors.join(", ")}`
-            : "Project Lead"
-          : otherContributors.length > 0
-          ? `Owner: ${meta.owner} • Co-team: ${otherContributors.join(", ")}`
-          : `Owner: ${meta.owner}`;
+        const personSubtitle =
+          pRecords.length === 0
+            ? "Awaiting first commitment"
+            : isOwner
+            ? meta.contributors.length > 0
+              ? `Contributors: ${meta.contributors.join(", ")}`
+              : "Project Lead"
+            : otherContributors.length > 0
+            ? `Owner: ${meta.owner} • Co-team: ${otherContributors.join(", ")}`
+            : `Owner: ${meta.owner}`;
 
         nodes.push({
           id: personNodeId,
@@ -558,10 +629,11 @@ export async function GET(req: NextRequest) {
             name: personName,
             role: roleDescription,
             subtitle: personSubtitle,
-            roleId: pRecords[0]?.personType || "collaborator",
+            roleId: pRecords[0]?.personType || (collabInfo ? "collaborator" : "collaborator"),
             isActivePersona: isCurrentActivePersona,
           },
         });
+
 
         // Edge from Project Node -> Person Node
         edges.push({

@@ -24,7 +24,9 @@ export const PERSONA_PROJECTS: Record<string, string[]> = {
   melati: ["Innovation Studio Portal", "Agent Memory Core"],
   mawar: ["Innovation Studio Portal"],
   cempaka: ["FalkorDB Clusters & SLA"],
+  sofia: ["Innovation Studio Portal", "Agent Memory Core", "FalkorDB Clusters & SLA"],
 };
+
 
 
 /**
