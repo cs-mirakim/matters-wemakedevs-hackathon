@@ -9,7 +9,7 @@
 ## 🌐 Live Submission Links
 * **Live Web App:** [https://matters.vercel.app](https://matters.vercel.app) *(or your deployed Vercel domain)*
 * **3-Minute Demo Video:** [https://youtu.be/DEMO_VIDEO_LINK](https://youtu.be/DEMO_VIDEO_LINK) *(YouTube / Loom / Google Drive)*
-* **GitHub Repository:** [https://github.com/cs-mirakim/matters](https://github.com/cs-mirakim/matters)
+* **GitHub Repository:** [https://github.com/cs-mirakim/matters-wemakedevs-hackathon](https://github.com/cs-mirakim/matters-wemakedevs-hackathon)
 
 ---
 
@@ -167,8 +167,9 @@ The graph data model, bi-temporal Cypher superseding logic, Next.js architecture
 
 ```bash
 # 1. Clone repo
-git clone https://github.com/cs-mirakim/matters.git
-cd matters
+git clone https://github.com/cs-mirakim/matters-wemakedevs-hackathon.git
+cd matters-wemakedevs-hackathon
+
 
 # 2. Install dependencies
 npm install
