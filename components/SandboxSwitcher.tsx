@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { GraduationCap, Briefcase, Hammer, User, Check, Sparkles, ShieldCheck, RotateCcw } from "lucide-react";
+import ResetSandboxModal from "@/components/ResetSandboxModal";
 
 export interface PersonaProfile {
   id: string;
@@ -69,6 +70,7 @@ export default function SandboxSwitcher({
   refreshTrigger,
 }: SandboxSwitcherProps) {
   const [hasSofia, setHasSofia] = useState(false);
+  const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
 
   useEffect(() => {
     try {
@@ -132,7 +134,7 @@ export default function SandboxSwitcher({
         {onResetSandbox && (
           <button
             type="button"
-            onClick={onResetSandbox}
+            onClick={() => setIsResetConfirmOpen(true)}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[11.5px] font-medium text-red-700 bg-red-50 hover:bg-red-100/80 border border-red-200/80 rounded-[8px] transition active:scale-95 cursor-pointer shadow-2xs self-start sm:self-center shrink-0"
             title="Reset sandbox state, clear simulated collaborators, and restore default personas"
           >
@@ -141,6 +143,16 @@ export default function SandboxSwitcher({
           </button>
         )}
       </div>
+
+      {/* Confirmation Modal */}
+      <ResetSandboxModal
+        isOpen={isResetConfirmOpen}
+        onClose={() => setIsResetConfirmOpen(false)}
+        onConfirm={() => {
+          setHasSofia(false);
+          if (onResetSandbox) onResetSandbox();
+        }}
+      />
 
       <div className={`grid grid-cols-1 sm:grid-cols-2 ${activePersonaList.length >= 5 ? "lg:grid-cols-5" : "lg:grid-cols-4"} gap-3`}>
         {activePersonaList.map((p) => {
