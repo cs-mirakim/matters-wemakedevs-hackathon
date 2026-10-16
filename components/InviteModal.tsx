@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { X, UserPlus, Check, Copy, Shield, Users, Mail, FolderGit2 } from "lucide-react";
+import { X, UserPlus, Check, Copy, Shield, Users, Mail, FolderGit2, Sparkles } from "lucide-react";
 
 interface InviteModalProps {
   isOpen: boolean;
@@ -10,6 +10,7 @@ interface InviteModalProps {
   graphName?: string;
   projects?: Array<{ id: string; name: string }>;
   selectedProject?: string;
+  isGuest?: boolean;
   onInviteMember?: (member: { name: string; email: string; role: string; projectId: string }) => void;
 }
 
@@ -23,6 +24,7 @@ export default function InviteModal({
     { id: "studio", name: "📁 Innovation Studio Portal" },
   ],
   selectedProject = "all",
+  isGuest = false,
   onInviteMember,
 }: InviteModalProps) {
   const [name, setName] = useState("");
@@ -37,13 +39,15 @@ export default function InviteModal({
 
   if (!isOpen) return null;
 
-  const inviteLink = `https://matters.ai/join?workspace=${graphName}&project=${assignedProject}&token=inv_${Math.random().toString(36).substring(2, 8)}`;
+  const currentOrigin = typeof window !== "undefined" ? window.location.origin : "https://matters.ai";
+  const inviteLink = `${currentOrigin}/login?inviteProject=${encodeURIComponent(assignedProject)}&inviter=${encodeURIComponent(workspaceName)}`;
 
   const handleCopyLink = () => {
     navigator.clipboard.writeText(inviteLink);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
+
 
   const handleSendInvite = (e: React.FormEvent) => {
     e.preventDefault();
@@ -101,8 +105,55 @@ export default function InviteModal({
 
         {/* Body */}
         <div className="p-5 space-y-4">
+          {/* Sandbox Demo Scenario Banner */}
+          {isGuest && (
+            <div className="p-3 rounded-[8px] bg-amber-50 border border-amber-200/80 text-[11.5px] space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5 font-semibold text-amber-900">
+                  <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+                  <span>Sandbox Live Demo: 1-Click Teammate Simulation</span>
+                </div>
+                <span className="text-[10px] uppercase font-mono px-1.5 py-0.5 rounded bg-amber-200/70 text-amber-900 font-bold">
+                  Demo Mode
+                </span>
+              </div>
+              <p className="text-amber-800 leading-relaxed text-[11px]">
+                Showcase collaborative graph onboarding to judges without waiting for email confirmations.
+              </p>
+              <div className="flex flex-wrap gap-2 pt-0.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const demoMember = {
+                      name: "Dr. Sofia",
+                      email: "sofia.security@matters.ai",
+                      role: "security agent",
+                      project: projects.find((p) => p.id === assignedProject)?.name || "Innovation Studio Portal",
+                    };
+                    setInvitedList((prev) => [demoMember, ...prev]);
+                    if (onInviteMember) {
+                      onInviteMember({
+                        name: demoMember.name,
+                        email: demoMember.email,
+                        role: demoMember.role,
+                        projectId: assignedProject,
+                      });
+                    }
+                    setJustInvitedSuccess(true);
+                    setTimeout(() => setJustInvitedSuccess(false), 3000);
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-[6px] font-medium text-[11px] shadow-xs cursor-pointer transition active:scale-95"
+                >
+                  <UserPlus className="w-3.5 h-3.5" />
+                  <span>Simulate: Add Dr. Sofia (Security Auditor Agent)</span>
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Email Invite Form with Project Scope Selector */}
           <form onSubmit={handleSendInvite} className="space-y-3">
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
               <div>
                 <label className="block text-[11px] font-semibold uppercase tracking-wider text-muted mb-1">

@@ -19,6 +19,14 @@ export const SANDBOX_WORKSPACE_PROJECTS: WorkspaceProjectItem[] = [
   { id: "FalkorDB Clusters & SLA", name: "📁 FalkorDB Clusters & SLA" },
 ];
 
+export const PERSONA_PROJECTS: Record<string, string[]> = {
+  aris: ["Innovation Studio Portal", "Agent Memory Core"],
+  melati: ["Innovation Studio Portal", "Agent Memory Core"],
+  mawar: ["Innovation Studio Portal"],
+  cempaka: ["FalkorDB Clusters & SLA"],
+};
+
+
 /**
  * Safely strips emojis (📁, 🌐), broken UTF-16 surrogates (\uD800-\uDFFF),
  * and unicode replacement characters (\uFFFD) from project names.

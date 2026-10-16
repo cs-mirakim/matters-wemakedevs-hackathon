@@ -141,16 +141,18 @@ export default function WorkspaceHeader({
               </button>
             )}
 
-            {isLoggedIn && onOpenInvite && (
+            {onOpenInvite && (
               <button
                 type="button"
                 onClick={onOpenInvite}
                 className="inline-flex items-center gap-1.5 h-[32px] px-3.5 text-[12px] font-medium text-foreground bg-white hover:bg-subtle border border-border rounded-[8px] transition active:scale-[0.99] shadow-xs cursor-pointer ml-1"
+                title="Invite collaborators or simulate onboarding"
               >
                 <UserPlus className="w-3.5 h-3.5 text-primary" />
                 <span>Invite Teammate</span>
               </button>
             )}
+
           </div>
         </div>
       </div>

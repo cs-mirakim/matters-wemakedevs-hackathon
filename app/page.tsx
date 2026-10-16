@@ -10,6 +10,7 @@ import {
   isAllProject,
   DEFAULT_WORKSPACE_PROJECTS,
   SANDBOX_WORKSPACE_PROJECTS,
+  PERSONA_PROJECTS,
 } from "@/lib/projects";
 import QuickCapture from "@/components/QuickCapture";
 import MemoryGraph from "@/components/MemoryGraph";
@@ -136,8 +137,31 @@ export default function HomePage() {
       }
     });
 
+    // 4. Auto-select invited project from query params or persistent session invite
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const projParam = urlParams.get("project");
+      let pendingProj: string | null = null;
+      const storedPending = sessionStorage.getItem("matters_pending_invite");
+      if (storedPending) {
+        try {
+          const parsed = JSON.parse(storedPending);
+          pendingProj = parsed.project;
+          sessionStorage.removeItem("matters_pending_invite");
+        } catch {}
+      }
+      const targetProj = projParam || pendingProj;
+      if (targetProj) {
+        const cleanTarget = cleanProjectName(targetProj);
+        if (cleanTarget && !isAllProject(cleanTarget)) {
+          setSelectedProject(cleanTarget);
+        }
+      }
+    } catch {}
+
     return () => unsubscribe();
   }, []);
+
 
   // Reset selectedMemory whenever user session or guest mode changes to prevent sandbox memory leakage
   useEffect(() => {
@@ -464,7 +488,16 @@ export default function HomePage() {
     : currentUser?.displayName ||
       (currentUser?.email ? currentUser.email.split("@")[0] : "Amir");
 
+  // Filter projects available to the active persona in sandbox mode
+  const personaProjectIds = PERSONA_PROJECTS[selectedPersona] || [];
+  const personaProjects = isGuest
+    ? SANDBOX_WORKSPACE_PROJECTS.filter(
+        (p) => p.id === "all" || personaProjectIds.includes(p.id)
+      )
+    : userProjects;
+
   if (!mounted) {
+
     return (
       <div className="min-h-screen flex flex-col bg-background text-foreground selection:bg-primary-soft">
         <header className="sticky top-0 z-50 w-full border-b border-border bg-white shadow-[0_1px_3px_rgba(0,0,0,0.03)]">
@@ -532,7 +565,7 @@ export default function HomePage() {
           graphName={isGuest ? "matters_sandbox" : graphName}
           selectedProject={selectedProject}
           onSelectProject={setSelectedProject}
-          projects={userProjects}
+          projects={personaProjects}
           onOpenCreateProject={() => setIsCreateProjectOpen(true)}
           onUpdateProject={handleUpdateProject}
           onDeleteProject={handleDeleteProject}
@@ -546,10 +579,14 @@ export default function HomePage() {
             currentPersona={selectedPersona}
             onSelectPersona={(personaId) => {
               setSelectedPersona(personaId);
-              setSelectedProject("all");
+              const allowed = PERSONA_PROJECTS[personaId] || [];
+              if (selectedProject !== "all" && !allowed.includes(selectedProject)) {
+                setSelectedProject(allowed[0] || "all");
+              }
               setRefreshTrigger((prev) => prev + 1);
             }}
           />
+
         )}
 
         {/* Live Interactive Demo Storyboard (1-Click Fail-Proof Judges Showcase) */}
@@ -589,7 +626,7 @@ export default function HomePage() {
             <QuickCapture
               currentUser={currentUser}
               selectedProject={selectedProject}
-              projects={userProjects}
+              projects={personaProjects}
               onMemoryCaptured={handleMemoryCaptured}
             />
 
@@ -689,8 +726,9 @@ export default function HomePage() {
         onClose={() => setIsInviteOpen(false)}
         workspaceName={`${userName}'s Workspace`}
         graphName={graphName}
-        projects={userProjects}
+        projects={personaProjects}
         selectedProject={selectedProject}
+        isGuest={isGuest}
         onInviteMember={() => setRefreshTrigger((prev) => prev + 1)}
       />
 

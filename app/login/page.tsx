@@ -30,6 +30,32 @@ function LoginContent() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
+  // Invite link detection & persistence across auth flows
+  const inviteProjectParam = searchParams.get("inviteProject");
+  const inviterParam = searchParams.get("inviter");
+  const [pendingInvite, setPendingInvite] = useState<{ project: string; inviter?: string } | null>(null);
+
+  useEffect(() => {
+    if (inviteProjectParam) {
+      const inviteData = {
+        project: decodeURIComponent(inviteProjectParam),
+        inviter: inviterParam ? decodeURIComponent(inviterParam) : undefined,
+      };
+      setPendingInvite(inviteData);
+      try {
+        sessionStorage.setItem("matters_pending_invite", JSON.stringify(inviteData));
+      } catch {}
+    } else {
+      try {
+        const stored = sessionStorage.getItem("matters_pending_invite");
+        if (stored) {
+          setPendingInvite(JSON.parse(stored));
+        }
+      } catch {}
+    }
+  }, [inviteProjectParam, inviterParam]);
+
+
   // Left banner slides
   const [activeSlide, setActiveSlide] = useState(0);
   const slides = [
@@ -143,7 +169,10 @@ function LoginContent() {
       };
       localStorage.setItem("matters_dev_user", JSON.stringify(userProfile));
       localStorage.removeItem("matters_sandbox_guest");
-      router.push("/");
+      const targetUrl = pendingInvite?.project
+        ? `/?project=${encodeURIComponent(pendingInvite.project)}`
+        : "/";
+      router.push(targetUrl);
     } catch (err: any) {
       setIsEntering(false);
       if (err?.code === "auth/popup-closed-by-user") return;
@@ -220,8 +249,12 @@ function LoginContent() {
     setEntryStepText("Preparing sandbox environment with 4 demo personas...");
     localStorage.removeItem("matters_dev_user");
     localStorage.setItem("matters_sandbox_guest", "true");
-    router.push("/");
+    const targetUrl = pendingInvite?.project
+      ? `/?project=${encodeURIComponent(pendingInvite.project)}`
+      : "/";
+    router.push(targetUrl);
   };
+
 
   return (
     <div className="min-h-screen bg-[#F0F4F8] flex items-center justify-center p-4 sm:p-6 lg:p-8 selection:bg-blue-500/20">
@@ -353,7 +386,29 @@ function LoginContent() {
               </div>
             )}
 
+            {/* Teammate Invitation Callout */}
+            {pendingInvite && (
+              <div className="mb-5 p-3.5 rounded-[12px] bg-gradient-to-r from-blue-50 to-indigo-50/70 border border-blue-200 text-blue-900 text-[12.5px] flex items-start gap-2.5 shadow-xs animate-in fade-in">
+                <span className="text-base leading-none mt-0.5">✉️</span>
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <p className="font-semibold text-blue-950">
+                      Workspace Invitation: {pendingInvite.project}
+                    </p>
+                    <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-blue-200/70 text-blue-900 font-bold uppercase">
+                      Pending
+                    </span>
+                  </div>
+                  <p className="text-[11.5px] text-blue-800 mt-0.5 leading-relaxed">
+                    {pendingInvite.inviter ? `Invited by ${pendingInvite.inviter}. ` : ""}
+                    Sign in or enter the sandbox below — you will automatically join and access this project without re-clicking any link.
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* Header Title Section */}
+
             <div>
               <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-blue-50 text-blue-700 border border-blue-200 mb-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
