@@ -78,3 +78,18 @@ export async function verifyAuthToken(
     };
   }
 }
+
+/**
+ * Padam akaun pengguna daripada Firebase Authentication.
+ */
+export async function deleteFirebaseUser(uid: string): Promise<boolean> {
+  initializeAdmin();
+  try {
+    await admin.auth().deleteUser(uid);
+    return true;
+  } catch (err: any) {
+    console.warn("[Firebase Admin] Failed to delete user from Firebase Auth:", err?.message || err);
+    return false;
+  }
+}
+

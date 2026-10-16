@@ -138,18 +138,8 @@ function LoginContent() {
       photoURL: googleUser.photoURL || null,
     };
 
-    // Store user session immediately so dashboard recognizes the user instantly
     try {
-      localStorage.setItem("matters_dev_user", JSON.stringify(userProfile));
-      localStorage.removeItem("matters_sandbox_guest");
-    } catch {}
-
-    const targetUrl = pendingInvite?.project
-      ? `/?project=${encodeURIComponent(pendingInvite.project)}`
-      : "/";
-
-    try {
-      // Auto-register in background / ensure tenant graph is active
+      // Check user registration status in FalkorDB
       const checkRes = await fetch("/api/auth/user", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -158,6 +148,22 @@ function LoginContent() {
       const checkData = await checkRes.json();
 
       if (!checkData.registered) {
+        if (activeTab === "signin") {
+          // User chose 'Sign In' but account does not exist or was deleted
+          try {
+            await firebaseSignOut(auth);
+            localStorage.removeItem("matters_dev_user");
+          } catch {}
+          setIsEntering(false);
+          setLoading(false);
+          setActiveTab("signup");
+          setErrorMessage(
+            "Akaun ini belum berdaftar atau telah dipadam. Sila klik 'Sign Up with Google' untuk mendaftar akaun baru."
+          );
+          return;
+        }
+
+        // User is in 'signup' mode: provision isolated tenant graph on FalkorDB
         setEntryStepText("Provisioning isolated graph container on FalkorDB Cloud...");
         await fetch("/api/auth/user", {
           method: "POST",
@@ -169,8 +175,18 @@ function LoginContent() {
         });
       }
     } catch (err: any) {
-      console.warn("FalkorDB registry auto-provision notice:", err);
+      console.warn("FalkorDB registry check notice:", err);
     }
+
+    // Store user session immediately once verified/registered
+    try {
+      localStorage.setItem("matters_dev_user", JSON.stringify(userProfile));
+      localStorage.removeItem("matters_sandbox_guest");
+    } catch {}
+
+    const targetUrl = pendingInvite?.project
+      ? `/?project=${encodeURIComponent(pendingInvite.project)}`
+      : "/";
 
     // Hard navigation to dashboard ensures zero React cache / prefetch bounce issues
     window.location.href = targetUrl;

@@ -455,16 +455,21 @@ export default function HomePage() {
     }
 
     try {
-      await firebaseSignOut(auth);
+      await auth.currentUser?.delete();
     } catch {
-      // ignore
+      try {
+        await firebaseSignOut(auth);
+      } catch {
+        // ignore
+      }
     }
     localStorage.removeItem("matters_dev_user");
     localStorage.removeItem("matters_user_projects");
     localStorage.removeItem("matters_sandbox_guest");
+    localStorage.removeItem("matters_deleted_projects");
     setCurrentUser(null);
     setIsDeleteAccountOpen(false);
-    window.location.href = "/login";
+    window.location.href = "/login?mode=signup";
   };
 
   const handleConfirmedExitSandbox = () => {

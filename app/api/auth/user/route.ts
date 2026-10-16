@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { verifyAuthToken } from "@/lib/firebase-admin";
+import { verifyAuthToken, deleteFirebaseUser } from "@/lib/firebase-admin";
 import {
   isUserRegistered,
   registerUser,
@@ -108,6 +108,14 @@ export async function DELETE(req: NextRequest) {
       );
     }
 
+    // 1. Delete user record from Firebase Authentication
+    try {
+      await deleteFirebaseUser(uid);
+    } catch (fbErr) {
+      console.warn("[/api/auth/user DELETE] Firebase user delete warning:", fbErr);
+    }
+
+    // 2. Delete tenant graph & remove from system registry in FalkorDB
     await deleteUserAccount(uid);
     return NextResponse.json({
       success: true,
