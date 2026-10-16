@@ -1,0 +1,9 @@
+{
+  "name": "matters-admin",
+  "version": "1.0.0",
+  "description": "Matters Admin Dashboard & FalkorDB Visual Explorer",
+  "scripts": {
+    "start": "node --env-file=../.env.local server.js",
+    "dev": "node --env-file=../.env.local server.js"
+  }
+}

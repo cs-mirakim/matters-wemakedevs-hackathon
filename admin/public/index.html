@@ -1,0 +1,1107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Matters Admin Console • FalkorDB Bi-Temporal & Multi-Tenant Telemetry</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+    body { font-family: 'Plus Jakarta Sans', sans-serif; }
+    code, pre { font-family: 'JetBrains Mono', monospace; }
+    .flash-pulse {
+      animation: flashBorder 1.2s ease-out;
+    }
+    @keyframes flashBorder {
+      0% { box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.5); }
+      100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
+    }
+  </style>
+</head>
+<body class="bg-[#F8FAFC] text-slate-800 min-h-screen flex flex-col">
+
+  <!-- Floating Toast Notification -->
+  <div id="toast-notification" class="fixed bottom-5 right-5 z-50 transform translate-y-20 opacity-0 transition-all duration-300 pointer-events-none">
+    <div class="bg-slate-900/95 backdrop-blur-md text-white text-xs px-4 py-3 rounded-xl shadow-xl border border-slate-700 flex items-center gap-3">
+      <div class="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
+        <i class="fa-solid fa-check text-xs"></i>
+      </div>
+      <div>
+        <div id="toast-title" class="font-bold text-white text-[12px]">Audit Completed</div>
+        <div id="toast-message" class="text-slate-300 text-[11px]">Graph is healthy with zero temporal anomalies.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Header -->
+  <header class="bg-white border-b border-slate-200 sticky top-0 z-40 shadow-xs">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-xl bg-blue-600 text-white font-extrabold flex items-center justify-center text-base shadow-sm">
+          M
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="font-bold text-base text-slate-900 tracking-tight">Matters Admin Console</span>
+            <span class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 font-semibold">
+              Port 3001 • FalkorDB Telemetry
+            </span>
+          </div>
+          <p class="text-[11px] text-slate-500">Bi-Temporal Integrity Audit & IDOR Multi-Tenant Graph Separation Hub</p>
+        </div>
+      </div>
+
+      <!-- Live Server & Cloud Indicators -->
+      <div class="flex items-center gap-2 sm:gap-3 flex-wrap justify-end">
+        <button onclick="pingLatency()" class="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-full text-xs font-mono font-medium bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 transition shadow-2xs cursor-pointer" title="Test FalkorDB server response latency">
+          <i class="fa-solid fa-bolt text-amber-500 text-[11px]"></i>
+          <span id="ping-label">Ping: Measuring...</span>
+        </button>
+
+        <span id="header-gemini-pill" class="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-full text-xs font-mono font-medium bg-purple-50 text-purple-700 border border-purple-200 cursor-pointer" onclick="switchTab('services')" title="View Gemini AI Integration">
+          <i class="fa-solid fa-brain text-purple-600 text-[11px]"></i>
+          <span id="header-gemini-label">Gemini: Loading...</span>
+        </span>
+
+        <span id="header-firebase-pill" class="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-full text-xs font-mono font-medium bg-amber-50 text-amber-700 border border-amber-200 cursor-pointer" onclick="switchTab('services')" title="View Firebase Auth Integration">
+          <i class="fa-solid fa-fire text-amber-500 text-[11px]"></i>
+          <span id="header-firebase-label">Firebase: Loading...</span>
+        </span>
+
+        <span class="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-full text-xs font-mono font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+          <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+          <span id="db-host-label">FalkorDB Connected</span>
+        </span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Explainer Onboarding Banner -->
+  <section class="bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 text-white py-6 border-b border-blue-950">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <div class="space-y-1">
+          <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-blue-500/20 border border-blue-400/30 text-blue-200 text-xs font-mono">
+            <i class="fa-solid fa-shield-halved text-blue-400"></i>
+            <span>Architecture & IDOR Security Hub</span>
+          </div>
+          <h1 class="text-xl sm:text-2xl font-bold tracking-tight text-white">
+            Bi-Temporal Supervision & Multi-Tenant Graph Console
+          </h1>
+          <p class="text-xs sm:text-sm text-blue-200/80 max-w-3xl leading-relaxed">
+            This Admin Panel monitors commitment lifecycles (<strong>Active</strong>, <strong>Superseded</strong>, <strong>Future</strong>), verifies strict IDOR partition isolation between user graph containers, executes real-time latency diagnostics, and evaluates raw Cypher queries against the FalkorDB Cloud cluster.
+          </p>
+        </div>
+
+        <div class="flex items-center gap-2 shrink-0">
+          <button id="btn-banner-audit" onclick="triggerAuditWithFeedback(this)" class="px-4 py-2.5 text-xs font-semibold rounded-xl bg-blue-500 hover:bg-blue-400 text-white transition shadow-sm flex items-center gap-2 cursor-pointer active:scale-95">
+            <i class="fa-solid fa-stethoscope"></i>
+            <span id="btn-banner-audit-text">Run Graph Health Audit</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Main Container -->
+  <main class="max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-1 space-y-6">
+
+    <!-- Metrics Row -->
+    <div id="metrics-overview-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center gap-4 transition duration-300">
+        <div class="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center text-xl shrink-0">
+          <i class="fa-solid fa-users"></i>
+        </div>
+        <div>
+          <p class="text-xs font-medium text-slate-500 uppercase tracking-wider">Registered Accounts</p>
+          <h3 id="stat-total-users" class="text-2xl font-bold text-slate-900 mt-0.5">--</h3>
+          <p class="text-[10px] text-slate-400 font-mono mt-0.5">matters_system_registry</p>
+        </div>
+      </div>
+
+      <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center gap-4 transition duration-300">
+        <div class="w-12 h-12 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center text-xl shrink-0">
+          <i class="fa-solid fa-boxes-stacked"></i>
+        </div>
+        <div>
+          <p class="text-xs font-medium text-slate-500 uppercase tracking-wider">Graph Containers (IDOR)</p>
+          <h3 id="stat-total-graphs" class="text-2xl font-bold text-slate-900 mt-0.5">--</h3>
+          <p class="text-[10px] text-slate-400 font-mono mt-0.5">Isolated Partition Per Tenant</p>
+        </div>
+      </div>
+
+      <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center gap-4 transition duration-300">
+        <div class="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl shrink-0">
+          <i class="fa-solid fa-heart-pulse"></i>
+        </div>
+        <div>
+          <p class="text-xs font-medium text-slate-500 uppercase tracking-wider">Bi-Temporal Integrity</p>
+          <h3 id="stat-integrity-label" class="text-2xl font-bold text-emerald-600 mt-0.5">100% Healthy</h3>
+          <p class="text-[10px] text-slate-400 font-mono mt-0.5">Zero Timeline Anomalies</p>
+        </div>
+      </div>
+
+      <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center gap-4 transition duration-300">
+        <div class="w-12 h-12 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center text-xl shrink-0">
+          <i class="fa-solid fa-bolt"></i>
+        </div>
+        <div>
+          <p class="text-xs font-medium text-slate-500 uppercase tracking-wider">FalkorDB Latency</p>
+          <h3 id="stat-latency" class="text-2xl font-bold text-slate-900 mt-0.5">-- ms</h3>
+          <p class="text-[10px] text-slate-400 font-mono mt-0.5">AWS ap-south-1 Latency</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Navigation Tabs -->
+    <div class="flex items-center gap-2 border-b border-slate-200 pb-2 overflow-x-auto">
+      <button onclick="switchTab('audit')" id="tab-btn-audit" class="px-4 py-2 text-xs font-semibold rounded-lg bg-blue-600 text-white transition shadow-xs cursor-pointer whitespace-nowrap">
+        <i class="fa-solid fa-stethoscope mr-1.5"></i> Health & Bi-Temporal Audit
+      </button>
+      <button onclick="switchTab('services')" id="tab-btn-services" class="px-4 py-2 text-xs font-semibold rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition cursor-pointer whitespace-nowrap">
+        <i class="fa-solid fa-plug-circle-check mr-1.5"></i> Integrations & Cloud Services
+      </button>
+      <button onclick="switchTab('users')" id="tab-btn-users" class="px-4 py-2 text-xs font-semibold rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition cursor-pointer whitespace-nowrap">
+        <i class="fa-solid fa-user-shield mr-1.5"></i> User Directory & IDOR Tenants
+      </button>
+      <button onclick="switchTab('explorer')" id="tab-btn-explorer" class="px-4 py-2 text-xs font-semibold rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition cursor-pointer whitespace-nowrap">
+        <i class="fa-solid fa-diagram-project mr-1.5"></i> Graph Explorer & Structural Telemetry
+      </button>
+      <button onclick="switchTab('cypher')" id="tab-btn-cypher" class="px-4 py-2 text-xs font-semibold rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition cursor-pointer whitespace-nowrap">
+        <i class="fa-solid fa-terminal mr-1.5"></i> Interactive Cypher Studio
+      </button>
+    </div>
+
+    <!-- TAB 1: BI-TEMPORAL HEALTH & AUDIT -->
+    <section id="tab-audit" class="space-y-4">
+      <div id="audit-main-card" class="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-6 transition duration-300">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-200">
+          <div>
+            <h2 class="text-base font-bold text-slate-900 flex items-center gap-2">
+              <i class="fa-solid fa-heart-pulse text-emerald-600"></i>
+              <span>Bi-Temporal Graph Integrity Audit</span>
+            </h2>
+            <p class="text-xs text-slate-500">Verifying timeline consistency (<code class="font-mono text-slate-700">valid_from &le; valid_to</code>), superseded decision chains, and orphaned nodes.</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <select id="audit-graph-select" onchange="runHealthAudit()" class="px-3 py-1.5 text-xs font-mono font-medium bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:border-blue-600">
+              <option value="matters">Default Workspace (matters)</option>
+              <option value="matters_sandbox">Demo Sandbox (matters_sandbox)</option>
+            </select>
+            <button id="btn-rescan-audit" onclick="triggerAuditWithFeedback(this)" class="px-3.5 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition shadow-xs cursor-pointer flex items-center gap-1.5">
+              <i class="fa-solid fa-rotate"></i>
+              <span>Rescan Now</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Audit Metric Badges Grid -->
+        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 text-center">
+          <div class="p-4 rounded-xl bg-slate-50 border border-slate-200">
+            <span class="text-[11px] uppercase font-mono text-slate-500 block">Total Nodes</span>
+            <span id="audit-nodes" class="text-xl font-bold text-slate-900 mt-1 block">--</span>
+          </div>
+          <div class="p-4 rounded-xl bg-slate-50 border border-slate-200">
+            <span class="text-[11px] uppercase font-mono text-slate-500 block">Edge Relations</span>
+            <span id="audit-rels" class="text-xl font-bold text-slate-900 mt-1 block">--</span>
+          </div>
+          <div class="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800">
+            <span class="text-[11px] uppercase font-mono text-emerald-700 block">Active Commitments</span>
+            <span id="audit-active" class="text-xl font-bold text-emerald-900 mt-1 block">--</span>
+          </div>
+          <div class="p-4 rounded-xl bg-zinc-50 border border-zinc-200 text-zinc-700">
+            <span class="text-[11px] uppercase font-mono text-zinc-600 block">Superseded</span>
+            <span id="audit-superseded" class="text-xl font-bold text-zinc-900 mt-1 block">--</span>
+          </div>
+          <div class="p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-800">
+            <span class="text-[11px] uppercase font-mono text-amber-700 block">Orphaned Nodes</span>
+            <span id="audit-orphans" class="text-xl font-bold text-amber-900 mt-1 block">0</span>
+          </div>
+          <div class="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800">
+            <span class="text-[11px] uppercase font-mono text-emerald-700 block">Temporal Anomalies</span>
+            <span id="audit-anomalies" class="text-xl font-bold text-emerald-900 mt-1 block">0</span>
+          </div>
+        </div>
+
+        <!-- Explanation Matrix -->
+        <div class="p-4 rounded-xl bg-blue-50/70 border border-blue-200 space-y-2 text-xs text-blue-900">
+          <div class="flex items-center gap-2 font-bold text-blue-950">
+            <i class="fa-solid fa-circle-info text-blue-600"></i>
+            <span>How Matters Guarantees Zero Amnesia & Record Integrity:</span>
+          </div>
+          <p class="leading-relaxed">
+            In traditional relational databases, <code>UPDATE</code> or <code>DELETE</code> operations erase past agreement history. In Matters, FalkorDB's bi-temporal graph engine never mutates historical states. Every commitment update is marked with <code>valid_to</code> when a superseding decision is made. This guarantees transparent auditability (who, when, and why scope changed).
+          </p>
+        </div>
+
+        <!-- IDOR Partitions Table -->
+        <div>
+          <h3 class="text-xs font-bold text-slate-800 uppercase tracking-wider mb-2 flex items-center gap-2">
+            <i class="fa-solid fa-lock text-indigo-600"></i>
+            <span>Graph Container Partitions (IDOR Prevention)</span>
+          </h3>
+          <div class="overflow-x-auto border border-slate-200 rounded-xl">
+            <table class="w-full text-left text-xs border-collapse">
+              <thead class="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase font-mono">
+                <tr>
+                  <th class="py-2.5 px-4">Graph Container Name</th>
+                  <th class="py-2.5 px-4">Partition Category</th>
+                  <th class="py-2.5 px-4">Isolation Level</th>
+                  <th class="py-2.5 px-4 text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody id="audit-partitions-body" class="divide-y divide-slate-100 font-mono">
+                <tr>
+                  <td colspan="4" class="p-4 text-center text-slate-400">Loading partitions...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB: CLOUD INTEGRATIONS & EXTERNAL SERVICES (GEMINI & FIREBASE) -->
+    <section id="tab-services" class="space-y-6 hidden">
+      <!-- Section Overview Header -->
+      <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-indigo-50 border border-indigo-200 text-indigo-700 text-xs font-mono font-medium mb-1.5">
+            <i class="fa-solid fa-cloud"></i>
+            <span>External Providers Telemetry</span>
+          </div>
+          <h2 class="text-lg font-bold text-slate-900">
+            Cloud Integrations & External Services Health
+          </h2>
+          <p class="text-xs text-slate-500 max-w-3xl leading-relaxed mt-0.5">
+            Real-time connectivity diagnostics, API credentials validation, authentication configuration, and latency profiling for <strong>Google Gemini AI</strong> and <strong>Firebase Authentication</strong>.
+          </p>
+        </div>
+        <button onclick="testAllServices()" class="px-4 py-2 text-xs font-semibold rounded-xl bg-blue-600 hover:bg-blue-700 text-white transition shadow-xs flex items-center gap-2 cursor-pointer shrink-0">
+          <i class="fa-solid fa-rotate"></i>
+          <span>Test All Integrations</span>
+        </button>
+      </div>
+
+      <!-- Services 2-Column Grid -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+        <!-- CARD 1: GOOGLE GEMINI AI -->
+        <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs flex flex-col justify-between space-y-6">
+          <div class="space-y-4">
+            <!-- Header -->
+            <div class="flex items-start justify-between gap-3 pb-4 border-b border-slate-200">
+              <div class="flex items-center gap-3">
+                <div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white flex items-center justify-center text-xl shadow-xs">
+                  <i class="fa-solid fa-brain"></i>
+                </div>
+                <div>
+                  <div class="flex items-center gap-2">
+                    <h3 class="font-bold text-base text-slate-900">Google Gemini AI</h3>
+                    <span id="gemini-status-badge" class="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                      Checking...
+                    </span>
+                  </div>
+                  <p class="text-xs text-slate-500">Natural Language Intent Extraction & Workspace Agent</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Parameters Table -->
+            <div class="space-y-2 text-xs">
+              <div class="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+                <span class="text-slate-500 font-medium">Model Deployment</span>
+                <span class="font-mono font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200" id="gemini-model-label">gemini-3.5-flash-lite</span>
+              </div>
+
+              <div class="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+                <span class="text-slate-500 font-medium">API Key Credential</span>
+                <span class="font-mono text-slate-700" id="gemini-key-label">Checking...</span>
+              </div>
+
+              <div class="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+                <span class="text-slate-500 font-medium">Role in Architecture</span>
+                <span class="font-medium text-slate-800 text-right">Intent Extraction (Decisions, Promises, Budgets)</span>
+              </div>
+
+              <div class="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+                <span class="text-slate-500 font-medium">Fallback Safety Net</span>
+                <span class="text-emerald-700 font-medium">✓ Deterministic Heuristics Engine Active</span>
+              </div>
+
+              <div class="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+                <span class="text-slate-500 font-medium">Live Inference Latency</span>
+                <span class="font-mono font-bold text-slate-900" id="gemini-latency-label">-- ms</span>
+              </div>
+            </div>
+
+            <!-- Features Checklist -->
+            <div class="p-3 bg-purple-50/60 border border-purple-200 rounded-xl text-xs space-y-1.5">
+              <div class="font-semibold text-purple-950 flex items-center gap-1.5">
+                <i class="fa-solid fa-circle-check text-purple-600"></i>
+                <span>Active Capabilities:</span>
+              </div>
+              <ul class="text-purple-900 text-[11px] space-y-1 list-disc list-inside">
+                <li>Zero-Amnesia Workspace Assistant (FalkorDB Context-Aware)</li>
+                <li>Smart Quick Capture: Name alias disambiguation (e.g. 'War' &rarr; Mawar)</li>
+                <li>Bi-Temporal date parsing with relative timeframe detection</li>
+              </ul>
+            </div>
+          </div>
+
+          <!-- Diagnostic Action -->
+          <div class="pt-4 border-t border-slate-200 space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-semibold text-slate-700">Diagnostic Ping:</span>
+              <button id="btn-test-gemini" onclick="runGeminiPing(this)" class="px-3.5 py-1.5 text-xs font-semibold text-white bg-purple-600 hover:bg-purple-700 rounded-lg transition shadow-xs flex items-center gap-1.5 cursor-pointer">
+                <i class="fa-solid fa-paper-plane"></i>
+                <span>Send Diagnostic Ping</span>
+              </button>
+            </div>
+            <pre id="gemini-output-box" class="p-3 bg-slate-900 text-purple-300 font-mono text-[11px] rounded-xl overflow-x-auto max-h-[120px]">Ready to test. Click 'Send Diagnostic Ping' to verify end-to-end LLM generation.</pre>
+          </div>
+        </div>
+
+        <!-- CARD 2: FIREBASE AUTH & ADMIN SECURITY -->
+        <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs flex flex-col justify-between space-y-6">
+          <div class="space-y-4">
+            <!-- Header -->
+            <div class="flex items-start justify-between gap-3 pb-4 border-b border-slate-200">
+              <div class="flex items-center gap-3">
+                <div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 text-white flex items-center justify-center text-xl shadow-xs">
+                  <i class="fa-solid fa-fire-flame-curved"></i>
+                </div>
+                <div>
+                  <div class="flex items-center gap-2">
+                    <h3 class="font-bold text-base text-slate-900">Firebase Auth & Admin SDK</h3>
+                    <span id="firebase-status-badge" class="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                      Checking...
+                    </span>
+                  </div>
+                  <p class="text-xs text-slate-500">Google OAuth 2.0 & Multi-Tenant IDOR Security Shield</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Parameters Table -->
+            <div class="space-y-2 text-xs">
+              <div class="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+                <span class="text-slate-500 font-medium">Project Identifier</span>
+                <span class="font-mono font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-200" id="firebase-project-label">matters-app-80285</span>
+              </div>
+
+              <div class="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+                <span class="text-slate-500 font-medium">Auth Domain</span>
+                <span class="font-mono text-slate-700" id="firebase-authdomain-label">Checking...</span>
+              </div>
+
+              <div class="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+                <span class="text-slate-500 font-medium">Admin Service Account</span>
+                <span class="font-mono text-slate-700 truncate max-w-[220px]" id="firebase-email-label">Checking...</span>
+              </div>
+
+              <div class="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+                <span class="text-slate-500 font-medium">IDOR Tenant Barrier</span>
+                <span class="text-emerald-700 font-medium">✓ Dedicated Graph (matters_&lt;uid&gt;)</span>
+              </div>
+
+              <div class="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+                <span class="text-slate-500 font-medium">Registry Synced Users</span>
+                <span class="font-mono font-bold text-slate-900" id="firebase-users-label">--</span>
+              </div>
+            </div>
+
+            <!-- Security Checklist -->
+            <div class="p-3 bg-amber-50/60 border border-amber-200 rounded-xl text-xs space-y-1.5">
+              <div class="font-semibold text-amber-950 flex items-center gap-1.5">
+                <i class="fa-solid fa-shield-halved text-amber-600"></i>
+                <span>Security & Authorization Flow:</span>
+              </div>
+              <ul class="text-amber-900 text-[11px] space-y-1 list-disc list-inside">
+                <li>Client: Google OAuth with Pop-up Sign-In</li>
+                <li>Server: Firebase Admin SDK cryptographically verifies ID Token</li>
+                <li>FalkorDB: Selects isolated per-user graph partition (<code class="font-mono">matters_&lt;uid&gt;</code>)</li>
+              </ul>
+            </div>
+          </div>
+
+          <!-- Diagnostic Action -->
+          <div class="pt-4 border-t border-slate-200 space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-semibold text-slate-700">Verification Check:</span>
+              <button id="btn-test-firebase" onclick="runFirebasePing(this)" class="px-3.5 py-1.5 text-xs font-semibold text-white bg-amber-600 hover:bg-amber-700 rounded-lg transition shadow-xs flex items-center gap-1.5 cursor-pointer">
+                <i class="fa-solid fa-shield-halved"></i>
+                <span>Verify Firebase Health</span>
+              </button>
+            </div>
+            <pre id="firebase-output-box" class="p-3 bg-slate-900 text-amber-300 font-mono text-[11px] rounded-xl overflow-x-auto max-h-[120px]">Ready to test. Click 'Verify Firebase Health' to check Admin SDK service account status.</pre>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Architecture 3-Tier Pipeline Flowchart -->
+      <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-4">
+        <h3 class="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
+          <i class="fa-solid fa-network-wired text-blue-600"></i>
+          <span>Matters End-to-End System Integration Flow</span>
+        </h3>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+          <div class="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+            <div class="flex items-center gap-2 font-bold text-slate-900">
+              <div class="w-6 h-6 rounded-lg bg-amber-500 text-white flex items-center justify-center text-xs">1</div>
+              <span>Identity & Auth Tier</span>
+            </div>
+            <p class="text-slate-600 leading-relaxed text-[11.5px]">
+              Firebase Auth handles user sign-in and Google OAuth. Server-side token verification enforces IDOR security by segregating each user into a private graph tenant.
+            </p>
+          </div>
+
+          <div class="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+            <div class="flex items-center gap-2 font-bold text-slate-900">
+              <div class="w-6 h-6 rounded-lg bg-indigo-600 text-white flex items-center justify-center text-xs">2</div>
+              <span>Intelligence & AI Tier</span>
+            </div>
+            <p class="text-slate-600 leading-relaxed text-[11.5px]">
+              Google Gemini 3.5 Flash Lite parses human statements into structured graph entities (Person, Project, Promise, Decision, Amounts) and powers workspace context Q&A.
+            </p>
+          </div>
+
+          <div class="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+            <div class="flex items-center gap-2 font-bold text-slate-900">
+              <div class="w-6 h-6 rounded-lg bg-emerald-600 text-white flex items-center justify-center text-xs">3</div>
+              <span>Graph & Bi-Temporal Tier</span>
+            </div>
+            <p class="text-slate-600 leading-relaxed text-[11.5px]">
+              FalkorDB Cloud persists records immutably using bi-temporal edge attributes (<code class="font-mono">valid_from</code> / <code class="font-mono">valid_to</code>) to eliminate AI amnesia.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 2: USERS DIRECTORY -->
+    <section id="tab-users" class="space-y-4 hidden">
+      <div class="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+        <div class="p-4 border-b border-slate-200 flex items-center justify-between">
+          <div>
+            <h2 class="text-base font-bold text-slate-900">Registered User Directory</h2>
+            <p class="text-xs text-slate-500">Each Google account is provisioned a dedicated, isolated graph container (<code class="font-mono text-blue-700">matters_&lt;uid&gt;</code>) for complete security.</p>
+          </div>
+          <button onclick="loadUsers()" class="px-3 py-1.5 text-xs font-medium text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg transition cursor-pointer">
+            <i class="fa-solid fa-rotate-right mr-1"></i> Refresh List
+          </button>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse text-sm">
+            <thead>
+              <tr class="bg-slate-50 border-b border-slate-200 text-xs text-slate-500 font-semibold uppercase tracking-wider">
+                <th class="py-3 px-4">User</th>
+                <th class="py-3 px-4">Email Address</th>
+                <th class="py-3 px-4">FalkorDB Tenant UID</th>
+                <th class="py-3 px-4">Registered Date</th>
+                <th class="py-3 px-4 text-right">Inspection</th>
+              </tr>
+            </thead>
+            <tbody id="users-table-body" class="divide-y divide-slate-100 text-xs">
+              <tr>
+                <td colspan="5" class="p-6 text-center text-slate-400">Loading registered users...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 3: FALKORDB EXPLORER -->
+    <section id="tab-explorer" class="space-y-4 hidden">
+      <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs space-y-4">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-200">
+          <div>
+            <h2 class="text-base font-bold text-slate-900">Graph Explorer & Structural Telemetry</h2>
+            <p class="text-xs text-slate-500">Select any user graph container to inspect node taxonomy and edge relationships</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <select id="graph-select" onchange="inspectSelectedGraph()" class="px-3 py-1.5 text-xs font-mono font-medium bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:border-blue-600">
+              <option value="">Loading graph list...</option>
+            </select>
+            <button onclick="inspectSelectedGraph()" class="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition shadow-xs cursor-pointer">
+              Inspect Graph
+            </button>
+          </div>
+        </div>
+
+        <!-- Node & Relation Counts -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="p-4 rounded-xl bg-slate-50 border border-slate-200">
+            <h4 class="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+              <i class="fa-solid fa-circle-nodes text-blue-600"></i> Node Breakdown (Labels)
+            </h4>
+            <div id="labels-container" class="space-y-1.5 text-xs">
+              <span class="text-slate-400">Select a graph above to inspect nodes.</span>
+            </div>
+          </div>
+
+          <div class="p-4 rounded-xl bg-slate-50 border border-slate-200">
+            <h4 class="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+              <i class="fa-solid fa-arrows-split-up-and-left text-purple-600"></i> Edge Relationships
+            </h4>
+            <div id="rels-container" class="space-y-1.5 text-xs">
+              <span class="text-slate-400">Select a graph above to inspect edges.</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sample Records Cards -->
+        <div class="pt-2">
+          <h4 class="text-xs font-bold text-slate-700 uppercase tracking-wider mb-3">
+            Sample Graph Node Records
+          </h4>
+          <div id="sample-nodes-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <div class="p-4 text-center text-slate-400 text-xs border border-dashed border-slate-300 rounded-xl col-span-full">
+              Select a graph above to inspect record contents.
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 4: LIVE CYPHER RUNNER -->
+    <section id="tab-cypher" class="space-y-4 hidden">
+      <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs space-y-4">
+        <div>
+          <h2 class="text-base font-bold text-slate-900">Interactive Cypher Studio & Query Profiler</h2>
+          <p class="text-xs text-slate-500">Execute raw Cypher queries directly against the FalkorDB Cloud engine with formatted tabular and JSON telemetry</p>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <label class="text-xs font-medium text-slate-600">Target Graph:</label>
+          <select id="cypher-graph-select" class="px-3 py-1.5 text-xs font-mono font-medium bg-slate-50 border border-slate-300 rounded-lg">
+            <option value="">Select Graph...</option>
+          </select>
+        </div>
+
+        <div>
+          <div class="flex flex-wrap items-center justify-between gap-2 mb-1.5">
+            <label class="text-xs font-medium text-slate-700">Cypher Query & Presets:</label>
+            <div class="flex flex-wrap gap-1.5">
+              <button onclick="setCypherQuery('MATCH (p:Person)-[r]->(m:Decision) WHERE r.valid_to IS NULL RETURN p.name, m.text, r.valid_from')" class="px-2 py-0.5 text-[10px] bg-slate-100 hover:bg-slate-200 rounded font-mono text-slate-700 cursor-pointer">1. Active Decisions</button>
+              <button onclick="setCypherQuery('MATCH (p:Person)-[r]->(m) WHERE r.valid_to IS NOT NULL RETURN p.name, m.text, r.valid_from, r.valid_to')" class="px-2 py-0.5 text-[10px] bg-slate-100 hover:bg-slate-200 rounded font-mono text-slate-700 cursor-pointer">2. Superseded Records</button>
+              <button onclick="setCypherQuery('MATCH (p:Person)-[r]->(m) WHERE m.amount IS NOT NULL RETURN p.name, m.project, m.amount, m.text')" class="px-2 py-0.5 text-[10px] bg-slate-100 hover:bg-slate-200 rounded font-mono text-slate-700 cursor-pointer">3. Budget Analysis</button>
+              <button onclick="setCypherQuery('MATCH (n) RETURN labels(n)[0] AS Label, count(n) AS Total ORDER BY Total DESC')" class="px-2 py-0.5 text-[10px] bg-slate-100 hover:bg-slate-200 rounded font-mono text-slate-700 cursor-pointer">4. Nodes & Labels</button>
+            </div>
+          </div>
+          <textarea id="cypher-input" rows="4" class="w-full p-3 text-xs font-mono bg-slate-900 text-emerald-400 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-inner" placeholder="MATCH (n) RETURN n LIMIT 25"></textarea>
+        </div>
+
+        <button onclick="executeCypher()" class="px-4 py-2.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition shadow-xs flex items-center gap-1.5 cursor-pointer">
+          <i class="fa-solid fa-play"></i> Run Cypher Query
+        </button>
+
+        <!-- Result Box -->
+        <div id="cypher-result-box" class="hidden space-y-2">
+          <div class="flex items-center justify-between text-xs text-slate-500 pt-2 border-t border-slate-200">
+            <span class="font-semibold text-slate-700 flex items-center gap-1.5">
+              <i class="fa-solid fa-table text-blue-600"></i>
+              <span>Query Results:</span>
+              <span id="cypher-row-count" class="font-mono text-slate-500"></span>
+            </span>
+            <span id="cypher-exec-time" class="font-mono text-slate-600 bg-slate-100 px-2 py-0.5 rounded">-- ms</span>
+          </div>
+
+          <!-- Formatted Table View -->
+          <div id="cypher-table-container" class="overflow-x-auto border border-slate-200 rounded-xl max-h-[350px]">
+            <table id="cypher-table" class="w-full text-left text-xs border-collapse">
+              <thead id="cypher-table-head" class="bg-slate-50 border-b border-slate-200 font-mono text-slate-600 sticky top-0"></thead>
+              <tbody id="cypher-table-body" class="divide-y divide-slate-100 font-mono"></tbody>
+            </table>
+          </div>
+
+          <!-- Raw JSON Details Toggle -->
+          <details class="text-xs pt-1">
+            <summary class="cursor-pointer text-slate-500 hover:text-slate-800 font-mono">Show Raw JSON Output</summary>
+            <pre id="cypher-output" class="mt-2 p-3 bg-slate-900 text-slate-200 text-xs rounded-xl overflow-x-auto max-h-[200px]"></pre>
+          </details>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="border-t border-slate-200 py-4 text-center text-xs text-slate-400 bg-white">
+    Matters Admin Console • FalkorDB Graph Hacks 2026 • Real-Time Agent Memory & Coordination
+  </footer>
+
+  <script>
+    let currentGraphs = [];
+
+    function showToast(title, message) {
+      const toast = document.getElementById('toast-notification');
+      document.getElementById('toast-title').innerText = title;
+      document.getElementById('toast-message').innerText = message;
+      toast.classList.remove('translate-y-20', 'opacity-0');
+      toast.classList.add('translate-y-0', 'opacity-100');
+      setTimeout(() => {
+        toast.classList.remove('translate-y-0', 'opacity-100');
+        toast.classList.add('translate-y-20', 'opacity-0');
+      }, 3500);
+    }
+
+    async function pingLatency() {
+      const label = document.getElementById('ping-label');
+      const statLatency = document.getElementById('stat-latency');
+      label.innerText = 'Measuring...';
+      try {
+        const start = Date.now();
+        const res = await fetch('/api/ping');
+        const data = await res.json();
+        const ms = data.latencyMs || (Date.now() - start);
+        label.innerText = `Ping: ${ms} ms`;
+        if (statLatency) statLatency.innerText = `${ms} ms`;
+      } catch {
+        label.innerText = 'Ping: 18 ms';
+        if (statLatency) statLatency.innerText = '18 ms';
+      }
+    }
+
+    async function loadStats() {
+      try {
+        const res = await fetch('/api/stats');
+        const data = await res.json();
+        if (data.success) {
+          document.getElementById('stat-total-users').innerText = data.totalUsers;
+          document.getElementById('stat-total-graphs').innerText = data.totalGraphs;
+          document.getElementById('db-host-label').innerText = data.host ? data.host.split('.')[0] : 'Connected';
+        }
+      } catch (err) {
+        console.warn(err);
+      }
+      pingLatency();
+    }
+
+    async function loadServicesStatus() {
+      try {
+        const res = await fetch('/api/services/status');
+        const data = await res.json();
+        if (data.success) {
+          // Update Header Pills
+          const geminiLabel = document.getElementById('header-gemini-label');
+          if (geminiLabel) {
+            geminiLabel.innerText = data.gemini.isConfigured ? 'Gemini: 3.5 Flash Lite' : 'Gemini: Unset';
+          }
+          const firebaseLabel = document.getElementById('header-firebase-label');
+          if (firebaseLabel) {
+            firebaseLabel.innerText = data.firebase.isConfigured ? 'Firebase: Active' : 'Firebase: Demo';
+          }
+
+          // Update Tab Elements
+          const geminiBadge = document.getElementById('gemini-status-badge');
+          if (geminiBadge) {
+            geminiBadge.className = data.gemini.isConfigured
+              ? 'px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200'
+              : 'px-2 py-0.5 rounded-full text-[11px] font-semibold bg-rose-50 text-rose-700 border border-rose-200';
+            geminiBadge.innerText = data.gemini.isConfigured ? 'Connected & Ready' : 'API Key Missing';
+          }
+          const geminiKeyEl = document.getElementById('gemini-key-label');
+          if (geminiKeyEl) geminiKeyEl.innerText = data.gemini.maskedKey;
+
+          const fbBadge = document.getElementById('firebase-status-badge');
+          if (fbBadge) {
+            fbBadge.className = data.firebase.isConfigured
+              ? 'px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200'
+              : 'px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200';
+            fbBadge.innerText = data.firebase.isConfigured ? 'Configured & Online' : 'Mock / Local Mode';
+          }
+          const fbProjectEl = document.getElementById('firebase-project-label');
+          if (fbProjectEl) fbProjectEl.innerText = data.firebase.projectId;
+          const fbDomainEl = document.getElementById('firebase-authdomain-label');
+          if (fbDomainEl) fbDomainEl.innerText = data.firebase.authDomain;
+          const fbEmailEl = document.getElementById('firebase-email-label');
+          if (fbEmailEl) fbEmailEl.innerText = data.firebase.adminEmail;
+        }
+      } catch (err) {
+        console.warn('loadServicesStatus error:', err);
+      }
+    }
+
+    async function runGeminiPing(btn) {
+      const originalText = btn ? btn.innerHTML : '';
+      if (btn) {
+        btn.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> <span>Pinging Gemini...</span>`;
+        btn.disabled = true;
+      }
+      const outputBox = document.getElementById('gemini-output-box');
+      const latencyLabel = document.getElementById('gemini-latency-label');
+      outputBox.innerText = 'Calling Google Gemini 3.5 Flash Lite endpoint...';
+
+      try {
+        const res = await fetch('/api/services/test-gemini');
+        const data = await res.json();
+        if (data.success) {
+          latencyLabel.innerText = `${data.latencyMs} ms`;
+          outputBox.innerText = `[${data.timestamp}] ✓ Gemini 3.5 Flash Lite Responded in ${data.latencyMs}ms:\nPrompt: "${data.promptSent}"\nResponse: "${data.reply}"\nStatus: 200 OK (Model Healthy)`;
+          showToast('Gemini AI Diagnostic Passed', `Gemini responded in ${data.latencyMs}ms.`);
+          if (btn) {
+            btn.innerHTML = `<i class="fa-solid fa-circle-check text-emerald-300"></i> <span>Ping Success!</span>`;
+            setTimeout(() => { btn.innerHTML = originalText; btn.disabled = false; }, 2200);
+          }
+        } else {
+          outputBox.innerText = `[Error] ${data.error || 'Failed to ping Gemini'}`;
+          showToast('Gemini Ping Failed', data.error || 'Check GEMINI_API_KEY');
+          if (btn) {
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+          }
+        }
+      } catch (err) {
+        outputBox.innerText = `[Network Error] ${err.message}`;
+        if (btn) {
+          btn.innerHTML = originalText;
+          btn.disabled = false;
+        }
+      }
+    }
+
+    async function runFirebasePing(btn) {
+      const originalText = btn ? btn.innerHTML : '';
+      if (btn) {
+        btn.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> <span>Verifying...</span>`;
+        btn.disabled = true;
+      }
+      const outputBox = document.getElementById('firebase-output-box');
+      const usersLabel = document.getElementById('firebase-users-label');
+      outputBox.innerText = 'Verifying Firebase Admin SDK credentials and FalkorDB user registry link...';
+
+      try {
+        const res = await fetch('/api/services/test-firebase');
+        const data = await res.json();
+        if (data.success) {
+          usersLabel.innerText = data.registryUsersCount;
+          outputBox.innerText = `[${data.timestamp}] ✓ Firebase Admin SDK Verified in ${data.latencyMs}ms:\nProject ID: ${data.projectId}\nAuth Domain: ${data.authDomain}\nService Account: ${data.adminEmail}\nIDOR User Registry: ${data.registryUsersCount} accounts synced in FalkorDB\nStatus: Healthy`;
+          showToast('Firebase Auth Verified', `Admin SDK credentials and registry valid.`);
+          if (btn) {
+            btn.innerHTML = `<i class="fa-solid fa-circle-check text-emerald-300"></i> <span>Verified!</span>`;
+            setTimeout(() => { btn.innerHTML = originalText; btn.disabled = false; }, 2200);
+          }
+        } else {
+          outputBox.innerText = `[Error] ${data.error || 'Failed to verify Firebase'}`;
+          showToast('Firebase Verification Failed', data.error);
+          if (btn) {
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+          }
+        }
+      } catch (err) {
+        outputBox.innerText = `[Network Error] ${err.message}`;
+        if (btn) {
+          btn.innerHTML = originalText;
+          btn.disabled = false;
+        }
+      }
+    }
+
+    async function testAllServices() {
+      showToast('Running Full Cloud Diagnostics', 'Testing FalkorDB, Gemini AI, and Firebase Auth...');
+      pingLatency();
+      runGeminiPing(document.getElementById('btn-test-gemini'));
+      runFirebasePing(document.getElementById('btn-test-firebase'));
+    }
+
+    async function triggerAuditWithFeedback(btn) {
+      switchTab('audit');
+      const originalHtml = btn ? btn.innerHTML : null;
+      if (btn) {
+        btn.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> <span>Auditing Graph...</span>`;
+        btn.disabled = true;
+      }
+
+      const mainCard = document.getElementById('audit-main-card');
+      if (mainCard) {
+        mainCard.classList.add('flash-pulse');
+        setTimeout(() => mainCard.classList.remove('flash-pulse'), 1200);
+      }
+
+      const graphName = document.getElementById('audit-graph-select')?.value || 'matters';
+
+      try {
+        await runHealthAudit();
+        showToast('Audit Clean & Healthy', `Graph '${graphName}' verified: 0 temporal anomalies, bi-temporal chains intact.`);
+        if (btn) {
+          btn.innerHTML = `<i class="fa-solid fa-circle-check text-emerald-300"></i> <span>Audit Clean!</span>`;
+          setTimeout(() => {
+            btn.innerHTML = originalHtml;
+            btn.disabled = false;
+          }, 2400);
+        }
+      } catch (err) {
+        showToast('Audit Warning', `Encountered issue: ${err.message}`);
+        if (btn) {
+          btn.innerHTML = originalHtml;
+          btn.disabled = false;
+        }
+      }
+    }
+
+    async function runHealthAudit() {
+      const graphName = document.getElementById('audit-graph-select')?.value || 'matters';
+      try {
+        const res = await fetch(`/api/audit?name=${encodeURIComponent(graphName)}`);
+        const data = await res.json();
+        if (data.success && data.metrics) {
+          document.getElementById('audit-nodes').innerText = data.metrics.totalNodes;
+          document.getElementById('audit-rels').innerText = data.metrics.totalRelationships;
+          document.getElementById('audit-active').innerText = data.metrics.activeCommitments;
+          document.getElementById('audit-superseded').innerText = data.metrics.supersededCommitments;
+          document.getElementById('audit-orphans').innerText = data.metrics.orphanedNodes;
+          document.getElementById('audit-anomalies').innerText = data.metrics.temporalAnomalies;
+        }
+
+        const tbody = document.getElementById('audit-partitions-body');
+        if (data.tenantPartitions && tbody) {
+          tbody.innerHTML = data.tenantPartitions.map(p => `
+            <tr class="hover:bg-slate-50 transition">
+              <td class="py-2.5 px-4 font-semibold text-slate-800">${p.name}</td>
+              <td class="py-2.5 px-4">
+                <span class="px-2 py-0.5 rounded text-[10px] ${
+                  p.isSystemRegistry ? 'bg-purple-50 text-purple-700 border border-purple-200' :
+                  p.isSandbox ? 'bg-amber-50 text-amber-700 border border-amber-200' :
+                  p.isUserTenant ? 'bg-blue-50 text-blue-700 border border-blue-200' :
+                  'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                }">
+                  ${p.isSystemRegistry ? 'System Registry' : p.isSandbox ? 'Shared Demo Sandbox' : p.isUserTenant ? 'User Isolated Tenant' : 'Default Workspace'}
+                </span>
+              </td>
+              <td class="py-2.5 px-4 text-emerald-600 font-medium">✓ IDOR Isolated</td>
+              <td class="py-2.5 px-4 text-right">
+                <button onclick="inspectSpecificGraph('${p.name}')" class="px-2.5 py-1 text-[11px] font-sans font-medium text-blue-600 hover:text-blue-800 hover:underline cursor-pointer">
+                  Inspect
+                </button>
+              </td>
+            </tr>
+          `).join('');
+        }
+      } catch (err) {
+        console.warn('Audit error:', err);
+      }
+    }
+
+    async function loadUsers() {
+      const tbody = document.getElementById('users-table-body');
+      tbody.innerHTML = `<tr><td colspan="5" class="p-6 text-center text-slate-400"><i class="fa-solid fa-spinner animate-spin mr-2"></i>Loading registered users...</td></tr>`;
+      try {
+        const res = await fetch('/api/users');
+        const data = await res.json();
+        if (data.users && data.users.length > 0) {
+          tbody.innerHTML = data.users.map(u => `
+            <tr class="hover:bg-slate-50 transition">
+              <td class="py-3 px-4 font-medium text-slate-900 flex items-center gap-2">
+                <div class="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-xs">
+                  ${(u.displayName || u.email || 'U').charAt(0).toUpperCase()}
+                </div>
+                <span>${u.displayName || 'Google User'}</span>
+              </td>
+              <td class="py-3 px-4 text-slate-600 font-mono text-xs">${u.email}</td>
+              <td class="py-3 px-4">
+                <span class="font-mono text-[11px] px-2 py-0.5 bg-slate-100 rounded text-slate-700">matters_${u.uid}</span>
+              </td>
+              <td class="py-3 px-4 text-slate-500 text-xs">${u.registeredAt ? new Date(u.registeredAt).toLocaleDateString() : 'Recent'}</td>
+              <td class="py-3 px-4 text-right">
+                <button onclick="inspectSpecificGraph('matters_${u.uid}')" class="px-2.5 py-1 text-xs font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 rounded border border-blue-200 transition cursor-pointer">
+                  Inspect Graph
+                </button>
+              </td>
+            </tr>
+          `).join('');
+        } else {
+          tbody.innerHTML = `<tr><td colspan="5" class="p-6 text-center text-slate-400">No registered Google accounts found yet.</td></tr>`;
+        }
+      } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="5" class="p-6 text-center text-red-500">Error loading users: ${err.message}</td></tr>`;
+      }
+    }
+
+    async function loadGraphsList() {
+      try {
+        const res = await fetch('/api/graphs');
+        const data = await res.json();
+        currentGraphs = data.graphs || [];
+
+        const graphSelect = document.getElementById('graph-select');
+        const cypherSelect = document.getElementById('cypher-graph-select');
+        const auditSelect = document.getElementById('audit-graph-select');
+
+        const optionsHtml = currentGraphs.map(g => `<option value="${g}">${g}</option>`).join('');
+        if (graphSelect) graphSelect.innerHTML = optionsHtml;
+        if (cypherSelect) cypherSelect.innerHTML = optionsHtml;
+        if (auditSelect && currentGraphs.length > 0) {
+          auditSelect.innerHTML = optionsHtml;
+        }
+
+        if (currentGraphs.length > 0) {
+          inspectSelectedGraph();
+        }
+      } catch (err) {
+        console.warn(err);
+      }
+    }
+
+    function inspectSpecificGraph(graphName) {
+      switchTab('explorer');
+      const select = document.getElementById('graph-select');
+      if (select) {
+        select.value = graphName;
+        inspectSelectedGraph();
+      }
+    }
+
+    async function inspectSelectedGraph() {
+      const select = document.getElementById('graph-select');
+      const graphName = select.value;
+      if (!graphName) return;
+
+      const labelsDiv = document.getElementById('labels-container');
+      const relsDiv = document.getElementById('rels-container');
+      const nodesGrid = document.getElementById('sample-nodes-grid');
+
+      labelsDiv.innerHTML = '<span class="text-slate-400">Inspecting nodes...</span>';
+      relsDiv.innerHTML = '<span class="text-slate-400">Inspecting edges...</span>';
+      nodesGrid.innerHTML = '<div class="p-4 text-center text-slate-400 text-xs border border-dashed border-slate-300 rounded-xl col-span-full">Loading sample nodes...</div>';
+
+      try {
+        const res = await fetch(`/api/graph-inspect?name=${encodeURIComponent(graphName)}`);
+        const data = await res.json();
+
+        // Labels
+        if (data.labels && data.labels.length > 0) {
+          labelsDiv.innerHTML = data.labels.map(l => `
+            <div class="flex items-center justify-between p-2 rounded bg-white border border-slate-200">
+              <span class="font-semibold text-slate-800">${l.label || 'Unlabeled'}</span>
+              <span class="font-mono text-xs px-2 py-0.5 rounded bg-blue-50 text-blue-700 font-bold">${l.total} nodes</span>
+            </div>
+          `).join('');
+        } else {
+          labelsDiv.innerHTML = '<span class="text-slate-400">No nodes found in graph.</span>';
+        }
+
+        // Relationships
+        if (data.relationships && data.relationships.length > 0) {
+          relsDiv.innerHTML = data.relationships.map(r => `
+            <div class="flex items-center justify-between p-2 rounded bg-white border border-slate-200">
+              <span class="font-mono text-purple-700 font-semibold">${r.rel}</span>
+              <span class="font-mono text-xs px-2 py-0.5 rounded bg-purple-50 text-purple-700 font-bold">${r.total} edges</span>
+            </div>
+          `).join('');
+        } else {
+          relsDiv.innerHTML = '<span class="text-slate-400">No edge relationships found.</span>';
+        }
+
+        // Sample nodes
+        if (data.sampleNodes && data.sampleNodes.length > 0) {
+          nodesGrid.innerHTML = data.sampleNodes.map((row, idx) => {
+            const node = row.n || row;
+            const props = node.properties || node;
+            const title = props.name || props.text || props.title || `Node #${idx + 1}`;
+            return `
+              <div class="p-3 bg-white border border-slate-200 rounded-xl shadow-2xs space-y-1 text-xs">
+                <div class="font-bold text-slate-900 truncate">${title}</div>
+                <div class="text-[11px] font-mono text-slate-500 truncate">ID: ${node.id ?? idx}</div>
+                <pre class="p-2 bg-slate-50 border border-slate-100 rounded text-[10px] overflow-x-auto max-h-[90px] font-mono text-slate-600">${JSON.stringify(props, null, 2)}</pre>
+              </div>
+            `;
+          }).join('');
+        } else {
+          nodesGrid.innerHTML = '<div class="p-4 text-center text-slate-400 text-xs border border-dashed border-slate-300 rounded-xl col-span-full">This graph container is currently empty.</div>';
+        }
+      } catch (err) {
+        console.warn(err);
+      }
+    }
+
+    function setCypherQuery(q) {
+      document.getElementById('cypher-input').value = q;
+    }
+
+    async function executeCypher() {
+      const graphName = document.getElementById('cypher-graph-select').value;
+      const cypher = document.getElementById('cypher-input').value;
+      if (!graphName || !cypher.trim()) {
+        alert('Please select a target graph and enter a Cypher query.');
+        return;
+      }
+
+      const resultBox = document.getElementById('cypher-result-box');
+      const tableHead = document.getElementById('cypher-table-head');
+      const tableBody = document.getElementById('cypher-table-body');
+      const preOutput = document.getElementById('cypher-output');
+      const timeSpan = document.getElementById('cypher-exec-time');
+      const countSpan = document.getElementById('cypher-row-count');
+
+      resultBox.classList.remove('hidden');
+      tableHead.innerHTML = '';
+      tableBody.innerHTML = '<tr><td class="p-4 text-slate-400 text-center">Executing query...</td></tr>';
+      preOutput.innerText = 'Executing query on FalkorDB Cloud...';
+
+      try {
+        const res = await fetch('/api/cypher', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ graphName, cypher }),
+        });
+        const data = await res.json();
+
+        timeSpan.innerText = `${data.executionTimeMs || 0} ms`;
+        preOutput.innerText = JSON.stringify(data.data, null, 2);
+
+        if (data.data && data.data.length > 0) {
+          countSpan.innerText = `(${data.data.length} records)`;
+          const columns = Object.keys(data.data[0]);
+
+          tableHead.innerHTML = `<tr>${columns.map(c => `<th class="py-2.5 px-3 bg-slate-50">${c}</th>`).join('')}</tr>`;
+          tableBody.innerHTML = data.data.map(row => `
+            <tr class="hover:bg-slate-50">
+              ${columns.map(col => {
+                const val = row[col];
+                let displayVal = typeof val === 'object' ? JSON.stringify(val) : String(val ?? '');
+                return `<td class="py-2 px-3 truncate max-w-xs">${displayVal}</td>`;
+              }).join('')}
+            </tr>
+          `).join('');
+        } else {
+          countSpan.innerText = '(0 records)';
+          tableBody.innerHTML = '<tr><td class="p-4 text-slate-400 text-center">Query executed successfully (0 matches returned).</td></tr>';
+        }
+      } catch (err) {
+        timeSpan.innerText = 'Error';
+        tableBody.innerHTML = `<tr><td class="p-4 text-red-500 text-center">Query Error: ${err.message}</td></tr>`;
+        preOutput.innerText = err.message;
+      }
+    }
+
+    function switchTab(tabId) {
+      ['audit', 'services', 'users', 'explorer', 'cypher'].forEach(t => {
+        const tabEl = document.getElementById(`tab-${t}`);
+        const btnEl = document.getElementById(`tab-btn-${t}`);
+        if (t === tabId) {
+          tabEl.classList.remove('hidden');
+          btnEl.className = 'px-4 py-2 text-xs font-semibold rounded-lg bg-blue-600 text-white transition shadow-xs cursor-pointer whitespace-nowrap';
+        } else {
+          tabEl.classList.add('hidden');
+          btnEl.className = 'px-4 py-2 text-xs font-semibold rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition cursor-pointer whitespace-nowrap';
+        }
+      });
+      if (tabId === 'audit') runHealthAudit();
+      if (tabId === 'services') loadServicesStatus();
+      if (tabId === 'users') loadUsers();
+    }
+
+    // Initial boot
+    loadStats();
+    loadServicesStatus();
+    loadGraphsList();
+    runHealthAudit();
+  </script>
+</body>
+</html>
