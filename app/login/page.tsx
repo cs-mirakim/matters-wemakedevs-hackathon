@@ -100,10 +100,10 @@ function LoginContent() {
     }
   }, [searchParams]);
 
-  // Purge lingering session data when landing on login & prefetch dashboard for instant navigation
+  // 1. If already logged in, instantly route to workspace (unless explicit logout)
   useEffect(() => {
-    const isRedirect = typeof window !== "undefined" && sessionStorage.getItem("matters_redirect_in_progress");
-    if (!isRedirect) {
+    const isLogout = searchParams.get("logout") === "true";
+    if (isLogout) {
       try {
         localStorage.removeItem("matters_dev_user");
         localStorage.removeItem("matters_sandbox_guest");
@@ -111,19 +111,43 @@ function LoginContent() {
         localStorage.removeItem("matters_reverted_memories");
         localStorage.removeItem("matters_deleted_projects");
       } catch {}
+    } else {
+      try {
+        const existing = localStorage.getItem("matters_dev_user");
+        if (existing) {
+          const parsed = JSON.parse(existing);
+          if (parsed?.uid) {
+            window.location.href = "/";
+          }
+        }
+      } catch {}
     }
-    try {
-      router.prefetch("/");
-    } catch {}
-  }, [router]);
+  }, [searchParams]);
 
   // Unified frictionless login & auto-provisioning
   const completeLogin = async (googleUser: any) => {
     setIsEntering(true);
-    setEntryStepText("Verifying user account in FalkorDB Cloud...");
+    setEntryStepText("Connecting to FalkorDB Cloud & workspace graph...");
+
+    const userProfile = {
+      uid: googleUser.uid,
+      email: googleUser.email || "",
+      displayName: googleUser.displayName || googleUser.email?.split("@")[0] || "User",
+      photoURL: googleUser.photoURL || null,
+    };
+
+    // Store user session immediately so dashboard recognizes the user instantly
+    try {
+      localStorage.setItem("matters_dev_user", JSON.stringify(userProfile));
+      localStorage.removeItem("matters_sandbox_guest");
+    } catch {}
+
+    const targetUrl = pendingInvite?.project
+      ? `/?project=${encodeURIComponent(pendingInvite.project)}`
+      : "/";
 
     try {
-      // 1. Check if user is registered in FalkorDB registry
+      // Auto-register in background / ensure tenant graph is active
       const checkRes = await fetch("/api/auth/user", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -131,7 +155,6 @@ function LoginContent() {
       });
       const checkData = await checkRes.json();
 
-      // 2. If not registered, auto-register immediately (zero-friction for judges and new users)
       if (!checkData.registered) {
         setEntryStepText("Provisioning isolated graph container on FalkorDB Cloud...");
         await fetch("/api/auth/user", {
@@ -139,80 +162,49 @@ function LoginContent() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             action: "register",
-            user: {
-              uid: googleUser.uid,
-              email: googleUser.email,
-              displayName: googleUser.displayName || googleUser.email?.split("@")[0] || "User",
-              photoURL: googleUser.photoURL || null,
-            },
+            user: userProfile,
           }),
         });
       }
-
-      setEntryStepText("Connecting to FalkorDB Cloud & loading workspace graph...");
-      const userProfile = {
-        uid: googleUser.uid,
-        email: googleUser.email || "",
-        displayName: googleUser.displayName || googleUser.email?.split("@")[0] || "User",
-        photoURL: googleUser.photoURL || null,
-      };
-
-      localStorage.setItem("matters_dev_user", JSON.stringify(userProfile));
-      localStorage.removeItem("matters_sandbox_guest");
-
-      if (typeof window !== "undefined") {
-        sessionStorage.removeItem("matters_auth_intent");
-        sessionStorage.removeItem("matters_redirect_in_progress");
-      }
-
-      const targetUrl = pendingInvite?.project
-        ? `/?project=${encodeURIComponent(pendingInvite.project)}`
-        : "/";
-      router.replace(targetUrl);
     } catch (err: any) {
-      console.error("Login completion error:", err);
-      setIsEntering(false);
-      setErrorMessage(err?.message || "Failed to initialize workspace in FalkorDB. Please try again.");
+      console.warn("FalkorDB registry auto-provision notice:", err);
     }
+
+    // Hard navigation to dashboard ensures zero React cache / prefetch bounce issues
+    window.location.href = targetUrl;
   };
 
-  // Handle redirect result & auth state when popup is blocked by ad-blocker or browser settings
+  // 2. Unconditional auth state & redirect listener (catches Google sign-in immediately)
   useEffect(() => {
-    let isCancelled = false;
+    const isLogout = searchParams.get("logout") === "true";
+    if (isLogout) return;
 
-    async function processRedirectAuth() {
-      try {
-        const result = await getRedirectResult(auth);
-        if (result && result.user && !isCancelled) {
+    let isDone = false;
+
+    // Listen continuously to Firebase Auth state
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser && !isDone) {
+        isDone = true;
+        await completeLogin(firebaseUser);
+      }
+    });
+
+    // Also process getRedirectResult directly in case of redirect return
+    getRedirectResult(auth)
+      .then(async (result) => {
+        if (result && result.user && !isDone) {
+          isDone = true;
           await completeLogin(result.user);
-          return;
         }
-      } catch (err: any) {
+      })
+      .catch((err: any) => {
         console.warn("getRedirectResult notice:", err);
-      }
-
-      // Also listen to onAuthStateChanged if redirect was initiated
-      const isRedirectInProgress =
-        typeof window !== "undefined" && sessionStorage.getItem("matters_redirect_in_progress");
-      if (isRedirectInProgress) {
-        const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-          if (firebaseUser && !isCancelled) {
-            if (typeof window !== "undefined") {
-              sessionStorage.removeItem("matters_redirect_in_progress");
-            }
-            await completeLogin(firebaseUser);
-          }
-        });
-        return () => unsubscribe();
-      }
-    }
-
-    processRedirectAuth();
+      });
 
     return () => {
-      isCancelled = true;
+      unsubscribe();
     };
-  }, [pendingInvite, router]);
+  }, [searchParams, pendingInvite]);
 
   const handleGoogleSignIn = async () => {
     setLoading(true);
@@ -240,12 +232,8 @@ function LoginContent() {
             errMsg.includes("popup") ||
             errMsg.includes("blocked")
           ) {
-            if (typeof window !== "undefined") {
-              sessionStorage.setItem("matters_auth_intent", "signin");
-              sessionStorage.setItem("matters_redirect_in_progress", "true");
-            }
             setIsEntering(true);
-            setEntryStepText("Browser popup blocked by ad-blocker. Redirecting directly to Google Sign-In...");
+            setEntryStepText("Redirecting to Google Sign-In...");
             await signInWithRedirect(auth, googleProvider);
             return;
           }
@@ -292,12 +280,14 @@ function LoginContent() {
   const handleContinueAsGuest = () => {
     setIsEntering(true);
     setEntryStepText("Preparing sandbox environment with 4 demo personas...");
-    localStorage.removeItem("matters_dev_user");
-    localStorage.setItem("matters_sandbox_guest", "true");
+    try {
+      localStorage.removeItem("matters_dev_user");
+      localStorage.setItem("matters_sandbox_guest", "true");
+    } catch {}
     const targetUrl = pendingInvite?.project
       ? `/?project=${encodeURIComponent(pendingInvite.project)}`
       : "/";
-    router.push(targetUrl);
+    window.location.href = targetUrl;
   };
 
 

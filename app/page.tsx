@@ -428,7 +428,7 @@ export default function HomePage() {
     setUserProjects(DEFAULT_WORKSPACE_PROJECTS);
     setSelectedProject("all");
     setRefreshTrigger((prev) => prev + 1);
-    router.push("/login");
+    window.location.href = "/login?logout=true";
   };
 
   const handleConfirmedDeleteAccount = async () => {
@@ -464,7 +464,7 @@ export default function HomePage() {
     localStorage.removeItem("matters_sandbox_guest");
     setCurrentUser(null);
     setIsDeleteAccountOpen(false);
-    router.push("/login");
+    window.location.href = "/login?logout=true";
   };
 
   const handleConfirmedExitSandbox = () => {
@@ -475,7 +475,7 @@ export default function HomePage() {
     setUserProjects(DEFAULT_WORKSPACE_PROJECTS);
     setSelectedProject("all");
     setIsExitSandboxOpen(false);
-    router.push("/login");
+    window.location.href = "/login?logout=true";
   };
 
   const graphName = currentUser?.uid
