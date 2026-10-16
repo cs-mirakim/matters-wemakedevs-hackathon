@@ -32,7 +32,6 @@ function LoginContent() {
 
   const [activeTab, setActiveTab] = useState<"signin" | "signup">(initialMode);
   const [loading, setLoading] = useState(false);
-  const [directEmail, setDirectEmail] = useState("");
   const [isEntering, setIsEntering] = useState(false);
   const [entryStepText, setEntryStepText] = useState("Initializing system...");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -275,28 +274,6 @@ function LoginContent() {
   const handleGoogleSignUp = async () => {
     // Both sign-in and sign-up invoke the same frictionless auto-provisioning flow
     await handleGoogleSignIn();
-  };
-
-  const handleDirectEmailLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!directEmail.trim()) return;
-
-    setLoading(true);
-    setErrorMessage(null);
-
-    const email = directEmail.trim().toLowerCase();
-    const name = email.split("@")[0].replace(/[._-]/g, " ");
-    const cleanName = name.charAt(0).toUpperCase() + name.slice(1);
-    const cleanUid = "user_" + email.replace(/[^a-zA-Z0-9]/g, "_");
-
-    const directUser = {
-      uid: cleanUid,
-      email,
-      displayName: cleanName,
-      photoURL: null,
-    };
-
-    await completeLogin(directUser);
   };
 
   const handleContinueAsGuest = () => {
@@ -544,44 +521,6 @@ function LoginContent() {
                 <Sparkles className="w-4 h-4 text-blue-600" />
                 <span>Instant Demo Sandbox (4 Personas)</span>
               </button>
-
-              {/* Direct Email Access (AdGuard & AdBlock Proof) */}
-              <div className="pt-2">
-                <form
-                  onSubmit={handleDirectEmailLogin}
-                  className="p-3.5 rounded-[14px] bg-slate-50 border border-slate-200/90 space-y-2.5 shadow-2xs"
-                >
-                  <div className="flex items-center justify-between text-[11px] font-medium text-slate-700">
-                    <span className="flex items-center gap-1.5 font-semibold text-slate-900">
-                      <Mail className="w-3.5 h-3.5 text-blue-600" />
-                      <span>Direct Email Sign-In</span>
-                    </span>
-                    <span className="text-[9.5px] font-mono text-emerald-700 bg-emerald-100/70 px-1.5 py-0.5 rounded font-semibold border border-emerald-300/60">
-                      AdGuard &amp; AdBlock Proof
-                    </span>
-                  </div>
-                  <div className="flex gap-2">
-                    <input
-                      type="email"
-                      value={directEmail}
-                      onChange={(e) => setDirectEmail(e.target.value)}
-                      placeholder="e.g. your.email@gmail.com"
-                      className="flex-1 px-3 py-2 text-xs rounded-[8px] border border-slate-200 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono text-slate-850 placeholder:text-slate-400"
-                      required
-                    />
-                    <button
-                      type="submit"
-                      disabled={loading}
-                      className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-[8px] text-xs font-semibold shrink-0 cursor-pointer transition shadow-xs active:scale-95"
-                    >
-                      Enter
-                    </button>
-                  </div>
-                  <p className="text-[10px] text-slate-500 leading-tight">
-                    Enter your personal FalkorDB tenant workspace instantly without third-party popups or redirects.
-                  </p>
-                </form>
-              </div>
             </div>
 
             {/* Checklist of Features */}
