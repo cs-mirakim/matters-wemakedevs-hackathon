@@ -273,6 +273,16 @@ export async function GET(req: NextRequest) {
       .map((s) => s.trim().toLowerCase())
       .filter(Boolean);
 
+    // Parse simulated/invited collaborators from client header early for scoping
+    const guestCollaboratorsHeader = req.headers.get("x-guest-collaborators");
+    let guestCollaborators: Array<{ name: string; email: string; role: string; projects: string[] }> = [];
+    if (guestCollaboratorsHeader) {
+      try {
+        const parsed = JSON.parse(decodeURIComponent(guestCollaboratorsHeader));
+        if (Array.isArray(parsed)) guestCollaborators = parsed;
+      } catch {}
+    }
+
     let records: any[] = [];
     let distinctProjects: string[] = [];
     let dbStatus = "connected";
@@ -362,12 +372,21 @@ export async function GET(req: NextRequest) {
       }
 
       // 2. Persona-aware project filtering:
-      if (personaParam && PERSONA_PROJECT_MAP[personaParam]) {
-        const allowed = PERSONA_PROJECT_MAP[personaParam].map((p) => cleanProjectName(p).toLowerCase());
-        // Only show projects this persona participates in:
-        distinctProjects = distinctProjects.filter((p) => allowed.includes(cleanProjectName(p).toLowerCase()));
+      let allowedProjectsForPersona: string[] | null = null;
+      if (personaParam === "sofia") {
+        const sofiaCollab = guestCollaborators.find((c) => c.name?.toLowerCase().includes("sofia"));
+        if (sofiaCollab && Array.isArray(sofiaCollab.projects) && sofiaCollab.projects.length > 0) {
+          allowedProjectsForPersona = sofiaCollab.projects.map((p) => cleanProjectName(p).toLowerCase());
+        }
+      }
+      if (!allowedProjectsForPersona && personaParam && PERSONA_PROJECT_MAP[personaParam]) {
+        allowedProjectsForPersona = PERSONA_PROJECT_MAP[personaParam].map((p) => cleanProjectName(p).toLowerCase());
+      }
+
+      if (allowedProjectsForPersona) {
+        distinctProjects = distinctProjects.filter((p) => allowedProjectsForPersona!.includes(cleanProjectName(p).toLowerCase()));
         if (!requestedProject || isAllProject(requestedProject)) {
-          records = records.filter((r) => allowed.includes(cleanProjectName(String(r.project)).toLowerCase()));
+          records = records.filter((r) => allowedProjectsForPersona!.includes(cleanProjectName(String(r.project)).toLowerCase()));
         }
       }
     }
@@ -403,16 +422,6 @@ export async function GET(req: NextRequest) {
     // Build the hierarchical graph
     const nodes: any[] = [];
     const edges: any[] = [];
-
-    // Parse simulated/invited collaborators from client header
-    const guestCollaboratorsHeader = req.headers.get("x-guest-collaborators");
-    let guestCollaborators: Array<{ name: string; email: string; role: string; projects: string[] }> = [];
-    if (guestCollaboratorsHeader) {
-      try {
-        const parsed = JSON.parse(decodeURIComponent(guestCollaboratorsHeader));
-        if (Array.isArray(parsed)) guestCollaborators = parsed;
-      } catch {}
-    }
 
     // Parse user-created projects from header
     const userProjectsHeader = req.headers.get("x-user-projects");

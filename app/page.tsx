@@ -489,10 +489,29 @@ export default function HomePage() {
       (currentUser?.email ? currentUser.email.split("@")[0] : "Amir");
 
   // Filter projects available to the active persona in sandbox mode
-  const personaProjectIds = PERSONA_PROJECTS[selectedPersona] || [];
+  let personaProjectIds = PERSONA_PROJECTS[selectedPersona] || [];
+  if (selectedPersona === "sofia") {
+    try {
+      const storedCollabs = localStorage.getItem("matters_sandbox_collaborators");
+      if (storedCollabs) {
+        const collabs = JSON.parse(storedCollabs);
+        const sofia = collabs.find((c: any) => c.name?.toLowerCase().includes("sofia"));
+        if (sofia && Array.isArray(sofia.projects) && sofia.projects.length > 0) {
+          personaProjectIds = sofia.projects.map((p: string) => cleanProjectName(p));
+        }
+      }
+    } catch {}
+  }
+
   const personaProjects = isGuest
     ? SANDBOX_WORKSPACE_PROJECTS.filter(
-        (p) => p.id === "all" || personaProjectIds.includes(p.id)
+        (p) =>
+          p.id === "all" ||
+          personaProjectIds.some(
+            (allowed) =>
+              cleanProjectName(allowed).toLowerCase() === cleanProjectName(p.name).toLowerCase() ||
+              cleanProjectName(allowed).toLowerCase() === cleanProjectName(p.id).toLowerCase()
+          )
       )
     : userProjects;
 
@@ -580,8 +599,23 @@ export default function HomePage() {
             refreshTrigger={refreshTrigger}
             onSelectPersona={(personaId) => {
               setSelectedPersona(personaId);
-              const allowed = PERSONA_PROJECTS[personaId] || [];
-              if (selectedProject !== "all" && !allowed.includes(selectedProject)) {
+              let allowed = PERSONA_PROJECTS[personaId] || [];
+              if (personaId === "sofia") {
+                try {
+                  const stored = localStorage.getItem("matters_sandbox_collaborators");
+                  if (stored) {
+                    const parsed = JSON.parse(stored);
+                    const s = parsed.find((c: any) => c.name?.toLowerCase().includes("sofia"));
+                    if (s && Array.isArray(s.projects) && s.projects.length > 0) {
+                      allowed = s.projects;
+                    }
+                  }
+                } catch {}
+              }
+              const isAllowed = (proj: string) =>
+                allowed.some((a) => cleanProjectName(a).toLowerCase() === cleanProjectName(proj).toLowerCase());
+
+              if (selectedProject !== "all" && !isAllowed(selectedProject)) {
                 setSelectedProject(allowed[0] || "all");
               }
               setRefreshTrigger((prev) => prev + 1);
