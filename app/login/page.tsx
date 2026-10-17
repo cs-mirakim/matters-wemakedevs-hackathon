@@ -776,8 +776,15 @@ function LoginContent() {
               )}
             </div>
 
-            <div className="text-[11px] font-mono text-slate-400">
-              100% Free • No CC Required
+            <div className="flex items-center gap-3 text-[11.5px]">
+              <a
+                href="/blog"
+                className="font-medium text-blue-600 hover:text-blue-800 underline underline-offset-2 transition"
+              >
+                Case Study & Architecture Blog
+              </a>
+              <span className="text-slate-300">•</span>
+              <span className="font-mono text-slate-400">100% Free</span>
             </div>
           </div>
         </div>

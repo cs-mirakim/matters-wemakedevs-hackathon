@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import Link from "next/link";
-import { LogIn, UserPlus, LogOut, Trash2, ChevronDown, User, Shield } from "lucide-react";
+import { LogIn, UserPlus, LogOut, Trash2, ChevronDown, User, Shield, BookOpen } from "lucide-react";
 
 interface NavbarProps {
   userEmail?: string | null;
@@ -72,6 +72,17 @@ export default function Navbar({
 
         {/* Right Header Navigation */}
         <div className="flex items-center gap-2 sm:gap-3">
+          {/* Blog / Case Study Link */}
+          <Link
+            href="/blog"
+            className="inline-flex items-center gap-1.5 h-[34px] px-3 rounded-[8px] bg-blue-50/80 hover:bg-blue-100 border border-blue-200 text-blue-700 text-[12px] font-semibold transition active:scale-[0.99] shadow-2xs"
+            title="Read Technical Case Study & Architecture Blog"
+          >
+            <BookOpen className="w-3.5 h-3.5 text-blue-600" />
+            <span className="hidden sm:inline">Case Study & Learnings</span>
+            <span className="sm:hidden">Blog</span>
+          </Link>
+
           {/* FalkorDB Graph Engine Indicator */}
           <div className="hidden md:flex items-center gap-2 h-[34px] px-3 rounded-[8px] bg-subtle border border-border text-[12px] text-muted">
             <span className="w-2 h-2 rounded-full bg-emerald-600 shrink-0" />
