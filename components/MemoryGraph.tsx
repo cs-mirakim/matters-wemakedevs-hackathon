@@ -383,53 +383,29 @@ export default function MemoryGraph({
           )}
         </div>
 
-        {/* Empty State Overlay when no memories exist yet in FalkorDB */}
-        {isGraphEmpty && (
-          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center p-6 text-center pointer-events-none">
-            <div className="bg-white/95 border border-border shadow-md rounded-[16px] p-8 max-w-md flex flex-col items-center">
-              <div className="w-14 h-14 rounded-[14px] bg-primary-soft text-primary border border-primary/20 flex items-center justify-center mb-3.5 shadow-2xs">
-                <Database className="w-7 h-7" />
-              </div>
-              <h3 className="text-[16px] font-semibold text-foreground tracking-tight">
-                FalkorDB Graph Container Ready
-              </h3>
-              <p className="text-[12.5px] text-muted mt-2 mb-4 leading-relaxed">
-                No commitments have been recorded yet for this project. Use the{" "}
-                <span className="font-semibold text-foreground">Quick Capture</span> panel on the left to add your first verbal agreement, pricing decision, or deadline.
-              </p>
-              <div className="flex items-center gap-2 text-[11px] font-mono text-muted bg-subtle px-3.5 py-1.5 rounded-full border border-border">
-                <Sparkles className="w-3.5 h-3.5 text-primary" />
-                <span>Nodes & edges will form automatically in real-time</span>
-              </div>
-            </div>
+        {/* Legend Overlay */}
+        <div className="absolute bottom-3 right-3 bg-white/95 backdrop-blur-sm border border-border rounded-[8px] p-2.5 text-[11px] shadow-xs flex items-center gap-3.5 z-10">
+          <div className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded bg-zinc-900" />
+            <span className="text-zinc-700 font-medium">Project Hub</span>
           </div>
-        )}
-
-        {/* Legend Overlay (Only shown when graph has nodes) */}
-        {!isGraphEmpty && (
-          <div className="absolute bottom-3 right-3 bg-white/95 backdrop-blur-sm border border-border rounded-[8px] p-2.5 text-[11px] shadow-xs flex items-center gap-3.5 z-10">
-            <div className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded bg-zinc-900" />
-              <span className="text-zinc-700 font-medium">Project Hub</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded bg-primary" />
-              <span className="text-zinc-700 font-medium">Collaborator</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded bg-emerald-500 animate-pulse" />
-              <span className="text-emerald-700 font-medium">Active</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded bg-zinc-300" />
-              <span className="text-zinc-500 line-through">Superseded</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded bg-amber-400" />
-              <span className="text-amber-700 font-medium">Future</span>
-            </div>
+          <div className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded bg-primary" />
+            <span className="text-zinc-700 font-medium">Collaborator</span>
           </div>
-        )}
+          <div className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded bg-emerald-500 animate-pulse" />
+            <span className="text-emerald-700 font-medium">Active</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded bg-zinc-300" />
+            <span className="text-zinc-500 line-through">Superseded</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded bg-amber-400" />
+            <span className="text-amber-700 font-medium">Future</span>
+          </div>
+        </div>
       </div>
     </div>
   );

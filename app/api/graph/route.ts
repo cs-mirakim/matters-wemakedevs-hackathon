@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAuthToken } from "@/lib/firebase-admin";
 import { getGraphForUser } from "@/lib/falkordb";
-import { cleanProjectName, formatProjectDisplay, isAllProject } from "@/lib/projects";
+import { cleanProjectName, formatProjectDisplay, isAllProject, isDummySandboxProject } from "@/lib/projects";
 
 export const dynamic = "force-dynamic";
 
@@ -251,10 +251,23 @@ export async function GET(req: NextRequest) {
     const authHeader = req.headers.get("authorization") || "";
     const personaParam = req.nextUrl.searchParams.get("persona") || "aris";
 
-    let user: any = null;
-    let isGuest = isGuestHeader || isGuestQuery || !authHeader || authHeader.includes("guest") || authHeader.includes("demo_user_session");
+    const workspaceOwnerHeader = req.headers.get("x-workspace-owner");
+    const workspaceOwnerQuery = req.nextUrl.searchParams.get("workspaceOwner");
+    const workspaceOwnerParam = workspaceOwnerHeader || workspaceOwnerQuery;
+    const isExplicitRealOwner = Boolean(
+      workspaceOwnerParam &&
+      workspaceOwnerParam !== "guest" &&
+      workspaceOwnerParam !== "null" &&
+      workspaceOwnerParam !== "undefined" &&
+      workspaceOwnerParam !== "sandbox"
+    );
 
-    if (!isGuest) {
+    let user: any = null;
+    let isGuest = isExplicitRealOwner
+      ? false
+      : (isGuestHeader || isGuestQuery || !authHeader || authHeader.includes("guest") || authHeader.includes("demo_user_session"));
+
+    if (!isGuest && !isExplicitRealOwner) {
       try {
         user = await verifyAuthToken(authHeader);
         if (!user || user.uid === "demo_user" || user.uid === "demo_tuah_student") {
@@ -287,16 +300,9 @@ export async function GET(req: NextRequest) {
     let distinctProjects: string[] = [];
     let dbStatus = "connected";
 
-    const workspaceOwnerHeader = req.headers.get("x-workspace-owner");
-    const workspaceOwnerQuery = req.nextUrl.searchParams.get("workspaceOwner");
-    const workspaceOwnerParam = workspaceOwnerHeader || workspaceOwnerQuery;
-    const targetUid =
-      workspaceOwnerParam &&
-      workspaceOwnerParam !== "guest" &&
-      workspaceOwnerParam !== "null" &&
-      workspaceOwnerParam !== "undefined"
-        ? workspaceOwnerParam
-        : user?.uid;
+    const targetUid = isExplicitRealOwner
+      ? workspaceOwnerParam
+      : user?.uid;
 
     if (!isGuest && targetUid) {
       try {
@@ -326,7 +332,7 @@ export async function GET(req: NextRequest) {
             ...(projectsResult?.data || []).map((row: any) => cleanProjectName(row?.project)).filter(Boolean),
             ...records.map((r) => cleanProjectName(r.project)).filter(Boolean),
           ])
-        );
+        ).filter((p) => !isDummySandboxProject(p));
 
         // Seamless Multi-Tenant Collaboration: Merge records and projects from shared owners directly into this workspace!
         const sharedOwnersHeader = req.headers.get("x-shared-owners");
@@ -372,13 +378,13 @@ export async function GET(req: NextRequest) {
 
                 (sProjectsResult?.data || []).forEach((row: any) => {
                   const cp = cleanProjectName(row?.project);
-                  if (cp && !distinctProjects.includes(cp)) {
+                  if (cp && !distinctProjects.includes(cp) && (!isDummySandboxProject(cp) || isGuest)) {
                     distinctProjects.push(cp);
                   }
                 });
                 sRecords.forEach((r: any) => {
                   const cp = cleanProjectName(r.project);
-                  if (cp && !distinctProjects.includes(cp)) {
+                  if (cp && !distinctProjects.includes(cp) && (!isDummySandboxProject(cp) || isGuest)) {
                     distinctProjects.push(cp);
                   }
                 });
@@ -509,6 +515,7 @@ export async function GET(req: NextRequest) {
           parsed.forEach((p: any) => {
             const clean = cleanProjectName(typeof p === "string" ? p : p.id || p.name);
             if (clean && !isAllProject(clean) && !distinctProjects.includes(clean)) {
+              if (!isGuest && isDummySandboxProject(clean)) return;
               distinctProjects.push(clean);
             }
           });
@@ -520,10 +527,19 @@ export async function GET(req: NextRequest) {
     if (requestedProject && !isAllProject(requestedProject)) {
       const reqClean = cleanProjectName(requestedProject);
       if (reqClean && !isAllProject(reqClean)) {
-        if (!distinctProjects.some((p) => normProj(p) === normProj(reqClean))) {
+        if (!isGuest && isDummySandboxProject(reqClean)) {
+          // Do not append dummy projects for real users
+        } else if (!distinctProjects.some((p) => normProj(p) === normProj(reqClean))) {
           distinctProjects.push(reqClean);
         }
       }
+    }
+
+    // Strict safety filter: Logged-in real users should NEVER see dummy sandbox projects
+    if (!isGuest) {
+      distinctProjects = distinctProjects.filter((p) => !isDummySandboxProject(p));
+      records = records.filter((r) => !isDummySandboxProject(r.project));
+      filtered = filtered.filter((r) => !isDummySandboxProject(r.project));
     }
 
     // Group records by Project and Person (including empty projects!)

@@ -27,6 +27,22 @@ export const PERSONA_PROJECTS: Record<string, string[]> = {
   sofia: ["Innovation Studio Portal", "Agent Memory Core", "FalkorDB Clusters & SLA"],
 };
 
+export const DUMMY_SANDBOX_PROJECT_NAMES = [
+  "innovation studio portal",
+  "agent memory core",
+  "falkordb clusters & sla",
+];
+
+/**
+ * Checks if a project is one of the built-in guest sandbox demo projects.
+ * Used to strictly prevent dummy demo projects from leaking into real user accounts.
+ */
+export function isDummySandboxProject(name?: string | null): boolean {
+  if (!name || typeof name !== "string") return false;
+  const clean = cleanProjectName(name).toLowerCase();
+  return DUMMY_SANDBOX_PROJECT_NAMES.includes(clean);
+}
+
 
 
 /**

@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { X, UserPlus, Check, Copy, Shield, Users, Mail, FolderGit2, Sparkles } from "lucide-react";
+import { isDummySandboxProject } from "@/lib/projects";
 
 interface InviteModalProps {
   isOpen: boolean;
@@ -22,7 +23,6 @@ export default function InviteModal({
   graphName = "matters_live_user",
   projects = [
     { id: "all", name: "🌐 All Projects in Workspace" },
-    { id: "studio", name: "📁 Innovation Studio Portal" },
   ],
   selectedProject = "all",
   isGuest = false,
@@ -307,7 +307,7 @@ export default function InviteModal({
               {!isAllWorkspace && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
                   {projects
-                    .filter((p) => p.id !== "all")
+                    .filter((p) => p.id !== "all" && (isGuest || (!isDummySandboxProject(p.id) && !isDummySandboxProject(p.name))))
                     .map((p) => {
                       const isChecked = chosenProjects.includes(p.id);
                       return (

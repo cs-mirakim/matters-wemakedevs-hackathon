@@ -8,6 +8,7 @@ import {
   cleanProjectName,
   formatProjectDisplay,
   isAllProject,
+  isDummySandboxProject,
   DEFAULT_WORKSPACE_PROJECTS,
   SANDBOX_WORKSPACE_PROJECTS,
   PERSONA_PROJECTS,
@@ -97,16 +98,24 @@ export default function HomePage() {
         setIsGuest(false);
         currentUid = parsed.uid;
 
-        // Load existing shared projects map
+        // Load existing shared projects map (purge any contaminated dummy sandbox projects)
         const userSharedKey = `matters_shared_projects_${parsed.uid}`;
         try {
           const storedMap = localStorage.getItem(userSharedKey);
           if (storedMap) {
-            setSharedProjectsMap(JSON.parse(storedMap));
+            const raw = JSON.parse(storedMap);
+            const cleanedShared: Record<string, any> = {};
+            for (const [k, v] of Object.entries(raw)) {
+              if (!isDummySandboxProject(k)) {
+                cleanedShared[k] = v;
+              }
+            }
+            setSharedProjectsMap(cleanedShared);
+            localStorage.setItem(userSharedKey, JSON.stringify(cleanedShared));
           }
         } catch {}
 
-        // Load user-specific projects if any
+        // Load user-specific projects if any (purge dummy projects)
         const userProjectsKey = `matters_projects_${parsed.uid}`;
         const saved = localStorage.getItem(userProjectsKey);
         if (saved) {
@@ -117,12 +126,12 @@ export default function HomePage() {
                 id: cleanProjectName(p.id || p.name),
                 name: formatProjectDisplay(p.name || p.id),
               }))
-              .filter((p: any) => p.id && !isAllProject(p.id));
-            setUserProjects(
-              sanitized.length > 0
-                ? [DEFAULT_WORKSPACE_PROJECTS[0], ...sanitized]
-                : DEFAULT_WORKSPACE_PROJECTS
-            );
+              .filter((p: any) => p.id && !isAllProject(p.id) && !isDummySandboxProject(p.id));
+            const finalList = sanitized.length > 0
+              ? [DEFAULT_WORKSPACE_PROJECTS[0], ...sanitized]
+              : DEFAULT_WORKSPACE_PROJECTS;
+            setUserProjects(finalList);
+            localStorage.setItem(userProjectsKey, JSON.stringify(finalList));
           }
         } else {
           setUserProjects(DEFAULT_WORKSPACE_PROJECTS);
@@ -192,13 +201,28 @@ export default function HomePage() {
           try {
             const userProjKey = `matters_projects_${currentUid}`;
             const sharedKey = `matters_shared_projects_${currentUid}`;
-            const existingShared = JSON.parse(localStorage.getItem(sharedKey) || "{}");
+            let existingShared: Record<string, any> = {};
+            try {
+              const raw = localStorage.getItem(sharedKey);
+              if (raw) existingShared = JSON.parse(raw);
+            } catch {}
+
+            // Clean existing shared from any dummy projects
+            const cleanedShared: Record<string, any> = {};
+            for (const [k, v] of Object.entries(existingShared)) {
+              if (!isDummySandboxProject(k)) {
+                cleanedShared[k] = v;
+              }
+            }
+            existingShared = cleanedShared;
+
+            const validProjNames = projNames.filter((name) => !isDummySandboxProject(name));
 
             setUserProjects((prev) => {
-              const updated = [...prev];
-              projNames.forEach((name) => {
+              const updated = prev.filter((p) => !isDummySandboxProject(p.id));
+              validProjNames.forEach((name) => {
                 const clean = cleanProjectName(name);
-                if (clean && !isAllProject(clean)) {
+                if (clean && !isAllProject(clean) && !isDummySandboxProject(clean)) {
                   if (!updated.some((p) => cleanProjectName(p.id).toLowerCase() === clean.toLowerCase())) {
                     updated.push({ id: clean, name: formatProjectDisplay(clean) });
                   }
@@ -216,13 +240,13 @@ export default function HomePage() {
               return updated;
             });
 
-            if (projNames.length > 0 && projNames[0] !== "all") {
-              setSelectedProject(cleanProjectName(projNames[0]));
+            if (validProjNames.length > 0 && validProjNames[0] !== "all") {
+              setSelectedProject(cleanProjectName(validProjNames[0]));
+              setInviteAcceptedNotice(
+                `Project "${validProjNames.join(", ")}" from ${decodedWsName} has been directly added to your workspace!`
+              );
+              setTimeout(() => setInviteAcceptedNotice(null), 5000);
             }
-            setInviteAcceptedNotice(
-              `Project "${projNames.join(", ")}" from ${decodedWsName} has been directly added to your workspace!`
-            );
-            setTimeout(() => setInviteAcceptedNotice(null), 5000);
 
             // Clean query parameters from URL so workspace stays clean
             const cleanUrl = new URL(window.location.href);
@@ -242,10 +266,26 @@ export default function HomePage() {
           registerProjectsIntoWorkspace([targetProj]);
         } else {
           // If invited to "all", fetch all projects created by owner and directly add them to user's workspace
-          fetch(`/api/graph?workspaceOwner=${targetOwner}`)
+          let authHeader = `Bearer ${currentUid}`;
+          try {
+            const devUser = localStorage.getItem("matters_dev_user");
+            if (devUser) {
+              const p = JSON.parse(devUser);
+              authHeader = `Bearer ${p.uid}`;
+            }
+          } catch {}
+
+          fetch(`/api/graph?workspaceOwner=${encodeURIComponent(targetOwner)}`, {
+            headers: {
+              Authorization: authHeader,
+              "x-workspace-owner": targetOwner,
+            },
+          })
             .then((res) => res.json())
             .then((data) => {
-              const foundProjects = data?.data?.distinctProjects || [];
+              const foundProjects = (data?.data?.distinctProjects || []).filter(
+                (p: string) => !isDummySandboxProject(p)
+              );
               if (foundProjects.length > 0) {
                 registerProjectsIntoWorkspace(foundProjects);
               }
@@ -465,7 +505,7 @@ export default function HomePage() {
 
     const filtered = (falkorProjects || [])
       .map((name) => cleanProjectName(name))
-      .filter((name) => name && !isAllProject(name) && !cleanDeleted.includes(name.toLowerCase()));
+      .filter((name) => name && !isAllProject(name) && !isDummySandboxProject(name) && !cleanDeleted.includes(name.toLowerCase()));
 
     setUserProjects((prev) => {
       let savedUserProjects: any[] = [];
@@ -484,6 +524,7 @@ export default function HomePage() {
                   (p: any) =>
                     p.id &&
                     !isAllProject(p.id) &&
+                    !isDummySandboxProject(p.id) &&
                     !cleanDeleted.includes(p.id.toLowerCase())
                 );
             }
@@ -497,7 +538,7 @@ export default function HomePage() {
       const addProject = (id: string) => {
         const clean = cleanProjectName(id);
         const lower = clean.toLowerCase();
-        if (clean && !isAllProject(clean) && !cleanDeleted.includes(lower) && !seenClean.has(lower)) {
+        if (clean && !isAllProject(clean) && !isDummySandboxProject(clean) && !cleanDeleted.includes(lower) && !seenClean.has(lower)) {
           seenClean.add(lower);
           combinedProjects.push({ id: clean, name: formatProjectDisplay(clean) });
         }
@@ -505,7 +546,7 @@ export default function HomePage() {
 
       savedUserProjects.forEach((p) => addProject(p.id));
       filtered.forEach((pName) => addProject(pName));
-      if (selectedProject && !isAllProject(selectedProject)) {
+      if (selectedProject && !isAllProject(selectedProject) && !isDummySandboxProject(selectedProject)) {
         addProject(selectedProject);
       }
 

@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
     });
 
     const displayInviter = inviterName || "A team collaborator";
-    const displayProject = projectName || "Innovation Studio Portal";
+    const displayProject = projectName || "Workspace Project";
     const displayRole = role || "Editor";
     const displayLink = inviteLink || "https://matters-wemakedevs-hackathon.vercel.app";
 
