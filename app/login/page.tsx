@@ -37,6 +37,12 @@ function LoginContent() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const isProcessingAuthRef = React.useRef(false);
+  const authActionRef = React.useRef<"signin" | "signup">(initialMode);
+
+  // Synchronize ref whenever activeTab updates
+  useEffect(() => {
+    authActionRef.current = activeTab;
+  }, [activeTab]);
 
   // Invite link detection & persistence across auth flows
   const inviteProjectParam = searchParams.get("inviteProject");
@@ -109,6 +115,7 @@ function LoginContent() {
     const mode = searchParams.get("mode");
     if (mode === "signup" || mode === "signin") {
       setActiveTab(mode);
+      authActionRef.current = mode;
     }
   }, [searchParams]);
 
@@ -176,9 +183,11 @@ function LoginContent() {
   }, [workspaceOwnerParam, inviterParam, inviteProjectParam, roleParam, pendingInvite]);
 
   // Unified frictionless login & auto-provisioning
-  const completeLogin = async (googleUser: any) => {
+  const completeLogin = async (googleUser: any, explicitMode?: "signin" | "signup") => {
     if (isProcessingAuthRef.current) return;
     isProcessingAuthRef.current = true;
+
+    const currentMode = explicitMode || authActionRef.current || activeTab;
 
     setIsEntering(true);
     setEntryStepText("Connecting to FalkorDB Cloud & workspace graph...");
@@ -199,8 +208,8 @@ function LoginContent() {
       });
       const checkData = await checkRes.json();
 
-      // STRICT STEP 1: If user is on 'signup' tab, register the account, then SIGN OUT and switch to 'signin' tab!
-      if (activeTab === "signup") {
+      // STRICT STEP 1: If user is on 'signup' mode, register the account, then SIGN OUT and switch to 'signin' tab!
+      if (currentMode === "signup") {
         if (!checkData.registered) {
           setEntryStepText("Provisioning isolated graph container on FalkorDB Cloud...");
           await fetch("/api/auth/user", {
@@ -222,15 +231,19 @@ function LoginContent() {
         setIsEntering(false);
         setLoading(false);
         setActiveTab("signin");
+        authActionRef.current = "signin";
+        setErrorMessage(null);
         setSuccessMessage(
-          "Account registered successfully! Please click 'Sign In with Google' below to enter your workspace."
+          checkData.registered
+            ? "This account is already registered! Please click 'Sign In with Google' below to enter your workspace."
+            : "Account registered successfully! Please click 'Sign In with Google' below to enter your workspace."
         );
         isProcessingAuthRef.current = false;
         return;
       }
 
-      // STRICT STEP 2: If user is on 'signin' tab, verify they are registered before allowing entry
-      if (activeTab === "signin") {
+      // STRICT STEP 2: If user is on 'signin' mode, verify they are registered before allowing entry
+      if (currentMode === "signin") {
         if (!checkData.registered) {
           // User chose 'Sign In' but account does not exist or was deleted
           try {
@@ -240,6 +253,8 @@ function LoginContent() {
           setIsEntering(false);
           setLoading(false);
           setActiveTab("signup");
+          authActionRef.current = "signup";
+          setSuccessMessage(null);
           setErrorMessage(
             "This account is not registered or was deleted. Please click 'Sign Up with Google' to register a new account."
           );
@@ -300,13 +315,21 @@ function LoginContent() {
 
   // 2. Unconditional auth state & redirect listener (catches Google sign-in immediately)
   useEffect(() => {
+    if (typeof window !== "undefined") {
+      const storedMode = sessionStorage.getItem("matters_auth_mode") as "signin" | "signup" | null;
+      if (storedMode) {
+        authActionRef.current = storedMode;
+        sessionStorage.removeItem("matters_auth_mode");
+      }
+    }
+
     let isDone = false;
 
     // Listen continuously to Firebase Auth state
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser && !isDone) {
         isDone = true;
-        await completeLogin(firebaseUser);
+        await completeLogin(firebaseUser, authActionRef.current);
       } else if (!firebaseUser) {
         isDone = false;
       }
@@ -317,7 +340,7 @@ function LoginContent() {
       .then(async (result) => {
         if (result && result.user && !isDone) {
           isDone = true;
-          await completeLogin(result.user);
+          await completeLogin(result.user, authActionRef.current);
         }
       })
       .catch((err: any) => {
@@ -329,7 +352,8 @@ function LoginContent() {
     };
   }, [pendingInvite]);
 
-  const handleGoogleSignIn = async () => {
+  const executeGoogleAuth = async (mode: "signin" | "signup") => {
+    authActionRef.current = mode;
     setLoading(true);
     setErrorMessage(null);
     setSuccessMessage(null);
@@ -351,14 +375,15 @@ function LoginContent() {
           // If the user deliberately dismissed the popup window, stop loading cleanly
           if (errCode === "auth/popup-closed-by-user" || errMsg.includes("closed-by-user")) {
             setLoading(false);
+            isProcessingAuthRef.current = false;
             return;
           }
 
-          // On popup-blocked, network-failed, or any adblock/cross-origin interference,
-          // smoothly fall back to first-party full-page redirect!
+          // On popup-blocked, smoothly fall back to first-party full-page redirect!
           console.warn("Popup blocked or intercepted, falling back to full-page redirect:", popupErr);
           setIsEntering(true);
           setEntryStepText("Redirecting to Google Sign-In...");
+          sessionStorage.setItem("matters_auth_mode", mode);
           await signInWithRedirect(auth, googleProvider);
           return;
         }
@@ -372,10 +397,11 @@ function LoginContent() {
       }
 
       if (googleUser) {
-        await completeLogin(googleUser);
+        await completeLogin(googleUser, mode);
       }
     } catch (err: any) {
       setIsEntering(false);
+      isProcessingAuthRef.current = false;
       console.warn("Google sign-in notice:", err);
       setErrorMessage(err?.message || "Google sign-in was interrupted. Please try again.");
     } finally {
@@ -383,9 +409,12 @@ function LoginContent() {
     }
   };
 
+  const handleGoogleSignIn = async () => {
+    await executeGoogleAuth("signin");
+  };
+
   const handleGoogleSignUp = async () => {
-    // Both sign-in and sign-up invoke the same frictionless auto-provisioning flow
-    await handleGoogleSignIn();
+    await executeGoogleAuth("signup");
   };
 
   const handleContinueAsGuest = () => {
