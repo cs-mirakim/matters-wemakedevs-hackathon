@@ -28,12 +28,7 @@ import {
 function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const initialMode =
-    searchParams.get("mode") === "signup" ||
-    searchParams.get("workspaceOwner") ||
-    searchParams.get("inviteProject")
-      ? "signup"
-      : "signin";
+  const initialMode = searchParams.get("mode") === "signup" ? "signup" : "signin";
 
   const [activeTab, setActiveTab] = useState<"signin" | "signup">(initialMode);
   const [loading, setLoading] = useState(false);
@@ -41,6 +36,7 @@ function LoginContent() {
   const [entryStepText, setEntryStepText] = useState("Initializing system...");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const isProcessingAuthRef = React.useRef(false);
 
   // Invite link detection & persistence across auth flows
   const inviteProjectParam = searchParams.get("inviteProject");
@@ -181,6 +177,9 @@ function LoginContent() {
 
   // Unified frictionless login & auto-provisioning
   const completeLogin = async (googleUser: any) => {
+    if (isProcessingAuthRef.current) return;
+    isProcessingAuthRef.current = true;
+
     setIsEntering(true);
     setEntryStepText("Connecting to FalkorDB Cloud & workspace graph...");
 
@@ -200,10 +199,40 @@ function LoginContent() {
       });
       const checkData = await checkRes.json();
 
-      if (!checkData.registered) {
-        const isInvited = Boolean(pendingInvite?.workspaceOwner || workspaceOwnerParam);
-        if (activeTab === "signin" && !isInvited) {
-          // User chose 'Sign In' but account does not exist or was deleted (and wasn't invited)
+      // STRICT STEP 1: If user is on 'signup' tab, register the account, then SIGN OUT and switch to 'signin' tab!
+      if (activeTab === "signup") {
+        if (!checkData.registered) {
+          setEntryStepText("Provisioning isolated graph container on FalkorDB Cloud...");
+          await fetch("/api/auth/user", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: "register",
+              user: userProfile,
+            }),
+          });
+        }
+
+        // Do NOT auto-login into system! Sign out and prompt user to sign in!
+        try {
+          await firebaseSignOut(auth);
+          localStorage.removeItem("matters_dev_user");
+        } catch {}
+
+        setIsEntering(false);
+        setLoading(false);
+        setActiveTab("signin");
+        setSuccessMessage(
+          "Account registered successfully! Please click 'Sign In with Google' below to enter your workspace."
+        );
+        isProcessingAuthRef.current = false;
+        return;
+      }
+
+      // STRICT STEP 2: If user is on 'signin' tab, verify they are registered before allowing entry
+      if (activeTab === "signin") {
+        if (!checkData.registered) {
+          // User chose 'Sign In' but account does not exist or was deleted
           try {
             await firebaseSignOut(auth);
             localStorage.removeItem("matters_dev_user");
@@ -214,19 +243,9 @@ function LoginContent() {
           setErrorMessage(
             "This account is not registered or was deleted. Please click 'Sign Up with Google' to register a new account."
           );
+          isProcessingAuthRef.current = false;
           return;
         }
-
-        // User is invited or in 'signup' mode: provision isolated tenant graph on FalkorDB
-        setEntryStepText("Provisioning isolated graph container on FalkorDB Cloud...");
-        await fetch("/api/auth/user", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            action: "register",
-            user: userProfile,
-          }),
-        });
       }
     } catch (err: any) {
       console.warn("FalkorDB registry check notice:", err);
@@ -288,6 +307,8 @@ function LoginContent() {
       if (firebaseUser && !isDone) {
         isDone = true;
         await completeLogin(firebaseUser);
+      } else if (!firebaseUser) {
+        isDone = false;
       }
     });
 
