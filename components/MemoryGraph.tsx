@@ -116,6 +116,14 @@ export default function MemoryGraph({
           }
         } catch {}
 
+        try {
+          const sharedKey = `matters_shared_projects_${currentUser?.uid}`;
+          const shared = localStorage.getItem(sharedKey);
+          if (shared) {
+            headers["x-shared-owners"] = encodeURIComponent(shared);
+          }
+        } catch {}
+
         if (workspaceOwner) {
           headers["x-workspace-owner"] = workspaceOwner;
           headers["x-user-role"] = userRole || "editor";

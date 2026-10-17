@@ -327,6 +327,67 @@ export async function GET(req: NextRequest) {
             ...records.map((r) => cleanProjectName(r.project)).filter(Boolean),
           ])
         );
+
+        // Seamless Multi-Tenant Collaboration: Merge records and projects from shared owners directly into this workspace!
+        const sharedOwnersHeader = req.headers.get("x-shared-owners");
+        if (sharedOwnersHeader) {
+          try {
+            const rawShared = JSON.parse(decodeURIComponent(sharedOwnersHeader));
+            const sharedList: Array<{ ownerUid: string; projectName?: string }> = Array.isArray(rawShared)
+              ? rawShared
+              : typeof rawShared === "object"
+              ? Object.values(rawShared)
+              : [];
+
+            const uniqueOwners = new Set(
+              sharedList
+                .map((s) => s.ownerUid)
+                .filter((uid) => uid && uid !== targetUid && uid !== user?.uid)
+            );
+
+            for (const sUid of uniqueOwners) {
+              try {
+                const sGraph = await getGraphForUser(sUid);
+                const [sResult, sProjectsResult]: any = await Promise.all([
+                  sGraph.query(GRAPH_CYPHER),
+                  sGraph.query(PROJECTS_CYPHER),
+                ]);
+
+                const sRecords = (sResult?.data || []).map((row: any) => ({
+                  personName: row?.personName ?? "Unknown",
+                  personType: row?.personType ?? "collaborator",
+                  relType: row?.relType ?? "MADE_PROMISE",
+                  validFrom: row?.validFrom ? String(row.validFrom).slice(0, 10) : "",
+                  validTo: row?.validTo ? String(row.validTo).slice(0, 10) : null,
+                  sourceId: row?.sourceId ?? "",
+                  confidence: Number(row?.confidence ?? 0.95),
+                  text: row?.text ?? "",
+                  amount: row?.amount ?? null,
+                  project: row?.project ?? "General",
+                  status: row?.status ?? "current",
+                  nodeType: row?.nodeType ?? "Promise",
+                }));
+
+                records = [...records, ...sRecords];
+
+                (sProjectsResult?.data || []).forEach((row: any) => {
+                  const cp = cleanProjectName(row?.project);
+                  if (cp && !distinctProjects.includes(cp)) {
+                    distinctProjects.push(cp);
+                  }
+                });
+                sRecords.forEach((r: any) => {
+                  const cp = cleanProjectName(r.project);
+                  if (cp && !distinctProjects.includes(cp)) {
+                    distinctProjects.push(cp);
+                  }
+                });
+              } catch (e: any) {
+                console.warn("[FalkorDB /api/graph] Shared graph query notice:", e?.message);
+              }
+            }
+          } catch {}
+        }
       } catch (err: any) {
         console.warn("[FalkorDB /api/graph] Read notice:", err?.message);
         dbStatus = "unavailable";

@@ -58,18 +58,11 @@ export default function HomePage() {
   const [refreshTrigger, setRefreshTrigger] = useState<number>(0);
   const [selectedProject, setSelectedProject] = useState<string>("all");
 
-  // Collaboration & Shared Workspace state
-  interface SharedWorkspaceEntry {
-    workspaceOwner: string;
-    workspaceName: string;
-    project: string;
-    role: string;
-    joinedAt: string;
-  }
-  const [workspaceOwner, setWorkspaceOwner] = useState<string | null>(null);
-  const [sharedWorkspaceName, setSharedWorkspaceName] = useState<string | null>(null);
-  const [userRole, setUserRole] = useState<string>("admin"); // "admin", "editor", "viewer"
-  const [sharedWorkspaces, setSharedWorkspaces] = useState<SharedWorkspaceEntry[]>([]);
+  // Collaboration: Map of shared projects [projectNameLowerCase] -> { ownerUid, inviter, role, projectName }
+  const [sharedProjectsMap, setSharedProjectsMap] = useState<
+    Record<string, { ownerUid: string; inviter: string; role: string; projectName: string }>
+  >({});
+  const [inviteAcceptedNotice, setInviteAcceptedNotice] = useState<string | null>(null);
 
   // Modals state
   const [isInviteOpen, setIsInviteOpen] = useState<boolean>(false);
@@ -92,23 +85,26 @@ export default function HomePage() {
       localStorage.removeItem("matters_user_projects");
     } catch {}
 
-    // Load saved collaborative workspaces from localStorage
-    try {
-      const storedWs = localStorage.getItem("matters_shared_workspaces");
-      if (storedWs) {
-        setSharedWorkspaces(JSON.parse(storedWs));
-      }
-    } catch {}
-
     // 2. Check dev user or guest mode
     const devUserStr = localStorage.getItem("matters_dev_user");
     const sandboxGuest = localStorage.getItem("matters_sandbox_guest");
+    let currentUid = "user";
 
     if (devUserStr) {
       try {
         const parsed = JSON.parse(devUserStr);
         setCurrentUser(parsed);
         setIsGuest(false);
+        currentUid = parsed.uid;
+
+        // Load existing shared projects map
+        const userSharedKey = `matters_shared_projects_${parsed.uid}`;
+        try {
+          const storedMap = localStorage.getItem(userSharedKey);
+          if (storedMap) {
+            setSharedProjectsMap(JSON.parse(storedMap));
+          }
+        } catch {}
 
         // Load user-specific projects if any
         const userProjectsKey = `matters_projects_${parsed.uid}`;
@@ -158,12 +154,12 @@ export default function HomePage() {
       }
     });
 
-    // 4. Auto-detect shared workspace & invited project from query params or persistent invite
+    // 4. Auto-detect shared projects from invitation query params or persistent invite
     try {
       const urlParams = new URLSearchParams(window.location.search);
-      const projParam = urlParams.get("project");
+      const projParam = urlParams.get("project") || urlParams.get("inviteProject");
       const ownerParam = urlParams.get("workspaceOwner");
-      const wsNameParam = urlParams.get("workspaceName");
+      const wsNameParam = urlParams.get("workspaceName") || urlParams.get("inviter");
       const roleParam = urlParams.get("role");
 
       let pendingProj: string | null = null;
@@ -188,44 +184,73 @@ export default function HomePage() {
       const targetRole = roleParam || pendingRole;
       const targetProj = projParam || pendingProj;
 
-      if (targetOwner && targetOwner !== "guest") {
-        setWorkspaceOwner(targetOwner);
-        const decodedWsName = targetWsName ? decodeURIComponent(targetWsName) : "Shared Workspace";
+      if (targetOwner && targetOwner !== "guest" && targetOwner !== currentUid) {
+        const decodedWsName = targetWsName ? decodeURIComponent(targetWsName) : "Teammate";
         const decodedRole = targetRole ? decodeURIComponent(targetRole) : "editor";
-        setSharedWorkspaceName(decodedWsName);
-        setUserRole(decodedRole);
 
-        // Automatically save to matters_shared_workspaces so User B never loses it!
-        try {
-          const stored = localStorage.getItem("matters_shared_workspaces");
-          const list: SharedWorkspaceEntry[] = stored ? JSON.parse(stored) : [];
-          const cleanTargetProj = targetProj ? cleanProjectName(targetProj) : "all";
-          const entry: SharedWorkspaceEntry = {
-            workspaceOwner: targetOwner,
-            workspaceName: decodedWsName,
-            project: cleanTargetProj || "all",
-            role: decodedRole,
-            joinedAt: new Date().toISOString(),
-          };
-          const filtered = list.filter(
-            (item) => item.workspaceOwner !== entry.workspaceOwner || item.project !== entry.project
-          );
-          filtered.push(entry);
-          localStorage.setItem("matters_shared_workspaces", JSON.stringify(filtered));
-          setSharedWorkspaces(filtered);
-        } catch {}
-      }
+        const registerProjectsIntoWorkspace = (projNames: string[]) => {
+          try {
+            const userProjKey = `matters_projects_${currentUid}`;
+            const sharedKey = `matters_shared_projects_${currentUid}`;
+            const existingShared = JSON.parse(localStorage.getItem(sharedKey) || "{}");
 
-      if (targetProj) {
-        const cleanTarget = cleanProjectName(targetProj);
-        if (cleanTarget && !isAllProject(cleanTarget)) {
-          setSelectedProject(cleanTarget);
-          setUserProjects((prev) => {
-            if (!prev.some((p) => cleanProjectName(p.id).toLowerCase() === cleanTarget.toLowerCase())) {
-              return [...prev, { id: cleanTarget, name: formatProjectDisplay(cleanTarget) }];
+            setUserProjects((prev) => {
+              const updated = [...prev];
+              projNames.forEach((name) => {
+                const clean = cleanProjectName(name);
+                if (clean && !isAllProject(clean)) {
+                  if (!updated.some((p) => cleanProjectName(p.id).toLowerCase() === clean.toLowerCase())) {
+                    updated.push({ id: clean, name: formatProjectDisplay(clean) });
+                  }
+                  existingShared[clean.toLowerCase()] = {
+                    ownerUid: targetOwner,
+                    inviter: decodedWsName,
+                    role: decodedRole,
+                    projectName: clean,
+                  };
+                }
+              });
+              localStorage.setItem(userProjKey, JSON.stringify(updated));
+              localStorage.setItem(sharedKey, JSON.stringify(existingShared));
+              setSharedProjectsMap({ ...existingShared });
+              return updated;
+            });
+
+            if (projNames.length > 0 && projNames[0] !== "all") {
+              setSelectedProject(cleanProjectName(projNames[0]));
             }
-            return prev;
-          });
+            setInviteAcceptedNotice(
+              `Project "${projNames.join(", ")}" from ${decodedWsName} has been directly added to your workspace!`
+            );
+            setTimeout(() => setInviteAcceptedNotice(null), 5000);
+
+            // Clean query parameters from URL so workspace stays clean
+            const cleanUrl = new URL(window.location.href);
+            cleanUrl.searchParams.delete("workspaceOwner");
+            cleanUrl.searchParams.delete("workspaceName");
+            cleanUrl.searchParams.delete("inviter");
+            cleanUrl.searchParams.delete("project");
+            cleanUrl.searchParams.delete("inviteProject");
+            cleanUrl.searchParams.delete("role");
+            window.history.replaceState({}, "", cleanUrl.pathname + (cleanUrl.search ? cleanUrl.search : ""));
+          } catch (e) {
+            console.warn("Failed to register shared project:", e);
+          }
+        };
+
+        if (targetProj && targetProj !== "all") {
+          registerProjectsIntoWorkspace([targetProj]);
+        } else {
+          // If invited to "all", fetch all projects created by owner and directly add them to user's workspace
+          fetch(`/api/graph?workspaceOwner=${targetOwner}`)
+            .then((res) => res.json())
+            .then((data) => {
+              const foundProjects = data?.data?.distinctProjects || [];
+              if (foundProjects.length > 0) {
+                registerProjectsIntoWorkspace(foundProjects);
+              }
+            })
+            .catch(() => {});
         }
       }
     } catch {}
@@ -557,7 +582,7 @@ export default function HomePage() {
     window.location.href = "/login";
   };
 
-  const effectiveGraphOwner = workspaceOwner || currentUser?.uid;
+  const effectiveGraphOwner = currentUser?.uid;
   const graphName = isGuest
     ? "matters_sandbox"
     : effectiveGraphOwner
@@ -639,67 +664,10 @@ export default function HomePage() {
     );
   }
 
-  const handleSelectWorkspace = (
-    targetOwner: string | null,
-    targetWsName?: string,
-    targetProj?: string,
-    role?: string
-  ) => {
-    if (!targetOwner) {
-      // Switch back to Personal Workspace
-      setWorkspaceOwner(null);
-      setSharedWorkspaceName(null);
-      setUserRole("admin");
-      try {
-        const url = new URL(window.location.href);
-        url.searchParams.delete("workspaceOwner");
-        url.searchParams.delete("workspaceName");
-        url.searchParams.delete("role");
-        window.history.replaceState({}, "", url.pathname + (url.search ? url.search : ""));
-      } catch {}
-      setRefreshTrigger((prev) => prev + 1);
-      return;
-    }
-
-    // Switch to Collaborative Workspace
-    setWorkspaceOwner(targetOwner);
-    if (targetWsName) setSharedWorkspaceName(targetWsName);
-    if (role) setUserRole(role);
-    if (targetProj && targetProj !== "all") {
-      const clean = cleanProjectName(targetProj);
-      setSelectedProject(clean);
-      setUserProjects((prev) => {
-        if (!prev.some((p) => cleanProjectName(p.id).toLowerCase() === clean.toLowerCase())) {
-          return [...prev, { id: clean, name: formatProjectDisplay(clean) }];
-        }
-        return prev;
-      });
-    }
-    try {
-      const url = new URL(window.location.href);
-      url.searchParams.set("workspaceOwner", targetOwner);
-      if (targetWsName) url.searchParams.set("workspaceName", targetWsName);
-      if (role) url.searchParams.set("role", role);
-      if (targetProj && targetProj !== "all") url.searchParams.set("project", targetProj);
-      window.history.replaceState({}, "", url.pathname + (url.search ? url.search : ""));
-    } catch {}
-    setRefreshTrigger((prev) => prev + 1);
-  };
-
-  const handleRemoveSharedWorkspace = (ownerUid: string, proj: string) => {
-    try {
-      const stored = localStorage.getItem("matters_shared_workspaces");
-      const list: SharedWorkspaceEntry[] = stored ? JSON.parse(stored) : [];
-      const filtered = list.filter(
-        (item) => !(item.workspaceOwner === ownerUid && item.project === proj)
-      );
-      localStorage.setItem("matters_shared_workspaces", JSON.stringify(filtered));
-      setSharedWorkspaces(filtered);
-      if (workspaceOwner === ownerUid) {
-        handleSelectWorkspace(null);
-      }
-    } catch {}
-  };
+  const currentCleanProj = cleanProjectName(selectedProject).toLowerCase();
+  const activeSharedMeta = sharedProjectsMap[currentCleanProj];
+  const effectiveWorkspaceOwner = activeSharedMeta ? activeSharedMeta.ownerUid : null;
+  const effectiveRole = activeSharedMeta ? activeSharedMeta.role : "admin";
 
   return (
     <div className="min-h-screen flex flex-col bg-background text-foreground selection:bg-primary-soft">
@@ -720,6 +688,23 @@ export default function HomePage() {
 
       {/* Main Workspace Dashboard: HCI Bento Grid */}
       <main className="flex-1 w-full mx-auto px-4 sm:px-5 lg:px-6 py-4 space-y-4">
+        {/* Project invitation accepted notice */}
+        {inviteAcceptedNotice && (
+          <div className="p-3.5 rounded-[12px] bg-emerald-50 border border-emerald-200 text-emerald-800 text-[12.5px] flex items-center justify-between shadow-2xs animate-in fade-in">
+            <div className="flex items-center gap-2.5">
+              <span className="text-base">🤝</span>
+              <span className="font-semibold">{inviteAcceptedNotice}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setInviteAcceptedNotice(null)}
+              className="text-xs text-emerald-700 hover:text-emerald-900 font-semibold underline cursor-pointer"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
+
         {/* Workspace & Project Bar */}
         <WorkspaceHeader
           isLoggedIn={!isGuest && !!currentUser}
@@ -734,12 +719,6 @@ export default function HomePage() {
           onDeleteProject={handleDeleteProject}
           onOpenInvite={() => setIsInviteOpen(true)}
           onExitSandbox={() => setIsExitSandboxOpen(true)}
-          workspaceOwner={workspaceOwner}
-          sharedWorkspaceName={sharedWorkspaceName}
-          userRole={userRole}
-          sharedWorkspaces={sharedWorkspaces}
-          onSelectWorkspace={handleSelectWorkspace}
-          onRemoveSharedWorkspace={handleRemoveSharedWorkspace}
         />
 
         {/* Synthetic Sandbox Persona Switcher (Guest Mode only) */}
@@ -786,43 +765,6 @@ export default function HomePage() {
           />
         )}
 
-        {/* Collaborative Shared Workspace Active Callout Banner */}
-        {workspaceOwner && (
-          <div className="p-3.5 rounded-[12px] bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 text-white flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-md border border-blue-700/50 animate-in fade-in">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-blue-500/20 border border-blue-400/40 flex items-center justify-center shrink-0">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="text-[13px] font-bold tracking-tight">
-                    Collaborating on: {sharedWorkspaceName || "Shared Team Workspace"}
-                  </span>
-                  <span className="text-[10px] font-mono px-2 py-0.5 rounded uppercase font-bold bg-blue-800 text-blue-200 border border-blue-500/40">
-                    Role: {userRole}
-                  </span>
-                  {userRole?.toLowerCase() === "viewer" && (
-                    <span className="text-[11px] text-amber-300 font-medium">
-                      (Read-Only Mode)
-                    </span>
-                  )}
-                </div>
-                <p className="text-[11.5px] text-blue-200/80 mt-0.5">
-                  Connected directly to the workspace owner&apos;s live FalkorDB bi-temporal graph container. Switch back anytime using the Workspace Selector above.
-                </p>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => handleSelectWorkspace(null)}
-              className="px-3.5 py-1.5 rounded-[8px] bg-white/10 hover:bg-white/20 text-white text-[11.5px] font-medium transition cursor-pointer shrink-0 border border-white/15"
-            >
-              Switch to My Personal Workspace
-            </button>
-          </div>
-        )}
-
         {/* Live Interactive Demo Storyboard (1-Click Fail-Proof Judges Showcase) */}
         <LiveDemoStoryboard
           currentUser={currentUser}
@@ -847,8 +789,8 @@ export default function HomePage() {
               currentUser={currentUser}
               persona={selectedPersona}
               isGuest={isGuest}
-              workspaceOwner={workspaceOwner}
-              userRole={userRole}
+              workspaceOwner={effectiveWorkspaceOwner}
+              userRole={effectiveRole}
               onNodeClick={(details) => setSelectedMemory(details)}
               onProjectsLoaded={handleProjectsLoaded}
               onAsOfDateChange={setAsOfDate}
@@ -863,8 +805,8 @@ export default function HomePage() {
               currentUser={currentUser}
               selectedProject={selectedProject}
               projects={personaProjects}
-              workspaceOwner={workspaceOwner}
-              userRole={userRole}
+              workspaceOwner={effectiveWorkspaceOwner}
+              userRole={effectiveRole}
               onMemoryCaptured={handleMemoryCaptured}
             />
 
@@ -875,7 +817,7 @@ export default function HomePage() {
               isGuest={isGuest}
               selectedProject={selectedProject}
               refreshTrigger={refreshTrigger}
-              workspaceOwner={workspaceOwner}
+              workspaceOwner={effectiveWorkspaceOwner}
               onAsOfDateChange={setAsOfDate}
               onSelectResult={(res) => {
                 let deletedList: string[] = [];
@@ -916,8 +858,8 @@ export default function HomePage() {
               projects={userProjects}
               currentUser={currentUser}
               asOfDate={asOfDate}
-              workspaceOwner={workspaceOwner}
-              userRole={userRole}
+              workspaceOwner={effectiveWorkspaceOwner}
+              userRole={effectiveRole}
               onMemoryUpdated={(updated) => {
                 setSelectedMemory(updated);
                 if (updated?.status === "current" && updated?.validFrom && asOfDate < updated.validFrom) {
@@ -939,7 +881,7 @@ export default function HomePage() {
               selectedProject={selectedProject}
               persona={selectedPersona}
               refreshTrigger={refreshTrigger}
-              workspaceOwner={workspaceOwner}
+              workspaceOwner={effectiveWorkspaceOwner}
             />
           </div>
         </div>
