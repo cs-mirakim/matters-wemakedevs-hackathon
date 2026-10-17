@@ -79,9 +79,12 @@ export async function POST(req: NextRequest) {
     let conflicts: any[] = [];
     let dbStatus = "connected";
 
-    if (!isGuest && user?.uid) {
+    const workspaceOwnerHeader = req.headers.get("x-workspace-owner");
+    const targetUid = workspaceOwnerHeader || user?.uid;
+
+    if (!isGuest && targetUid) {
       try {
-        const graph = await getGraphForUser(user.uid);
+        const graph = await getGraphForUser(targetUid);
         const res: any = await graph.query(timeTravelCypher, {
           params: { personName, asOf },
         });

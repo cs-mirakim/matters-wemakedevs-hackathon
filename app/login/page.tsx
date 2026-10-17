@@ -40,13 +40,23 @@ function LoginContent() {
   // Invite link detection & persistence across auth flows
   const inviteProjectParam = searchParams.get("inviteProject");
   const inviterParam = searchParams.get("inviter");
-  const [pendingInvite, setPendingInvite] = useState<{ project: string; inviter?: string } | null>(null);
+  const workspaceOwnerParam = searchParams.get("workspaceOwner");
+  const roleParam = searchParams.get("role") || "editor";
+
+  const [pendingInvite, setPendingInvite] = useState<{
+    project: string;
+    inviter?: string;
+    workspaceOwner?: string;
+    role?: string;
+  } | null>(null);
 
   useEffect(() => {
-    if (inviteProjectParam) {
+    if (inviteProjectParam || workspaceOwnerParam) {
       const inviteData = {
-        project: decodeURIComponent(inviteProjectParam),
+        project: inviteProjectParam ? decodeURIComponent(inviteProjectParam) : "all",
         inviter: inviterParam ? decodeURIComponent(inviterParam) : undefined,
+        workspaceOwner: workspaceOwnerParam ? decodeURIComponent(workspaceOwnerParam) : undefined,
+        role: roleParam ? decodeURIComponent(roleParam) : "editor",
       };
       setPendingInvite(inviteData);
       try {
@@ -60,7 +70,7 @@ function LoginContent() {
         }
       } catch {}
     }
-  }, [inviteProjectParam, inviterParam]);
+  }, [inviteProjectParam, inviterParam, workspaceOwnerParam, roleParam]);
 
 
   // Left banner slides
@@ -184,9 +194,42 @@ function LoginContent() {
       localStorage.removeItem("matters_sandbox_guest");
     } catch {}
 
-    const targetUrl = pendingInvite?.project
-      ? `/?project=${encodeURIComponent(pendingInvite.project)}`
-      : "/";
+    // If joining someone else's workspace, persist the collaboration linkage
+    if (pendingInvite?.workspaceOwner && pendingInvite.workspaceOwner !== googleUser.uid) {
+      try {
+        const stored = localStorage.getItem("matters_shared_workspaces");
+        const list = stored ? JSON.parse(stored) : [];
+        const entry = {
+          workspaceOwner: pendingInvite.workspaceOwner,
+          workspaceName: pendingInvite.inviter || "Shared Workspace",
+          project: pendingInvite.project || "All Projects",
+          role: pendingInvite.role || "editor",
+          joinedAt: new Date().toISOString(),
+        };
+        const filtered = list.filter(
+          (item: any) =>
+            item.workspaceOwner !== entry.workspaceOwner || item.project !== entry.project
+        );
+        filtered.push(entry);
+        localStorage.setItem("matters_shared_workspaces", JSON.stringify(filtered));
+      } catch {}
+    }
+
+    const targetParams = new URLSearchParams();
+    if (pendingInvite?.workspaceOwner && pendingInvite.workspaceOwner !== googleUser.uid) {
+      targetParams.set("workspaceOwner", pendingInvite.workspaceOwner);
+    }
+    if (pendingInvite?.inviter) {
+      targetParams.set("workspaceName", pendingInvite.inviter);
+    }
+    if (pendingInvite?.project && pendingInvite.project !== "all") {
+      targetParams.set("project", pendingInvite.project);
+    }
+    if (pendingInvite?.role) {
+      targetParams.set("role", pendingInvite.role);
+    }
+
+    const targetUrl = targetParams.toString() ? `/?${targetParams.toString()}` : "/";
 
     // Hard navigation to dashboard ensures zero React cache / prefetch bounce issues
     window.location.href = targetUrl;
@@ -447,15 +490,15 @@ function LoginContent() {
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
                     <p className="font-semibold text-blue-950">
-                      Workspace Invitation: {pendingInvite.project}
+                      Workspace Invitation: {pendingInvite.inviter || "Shared Workspace"}
                     </p>
                     <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-blue-200/70 text-blue-900 font-bold uppercase">
-                      Pending
+                      Role: {pendingInvite.role || "Editor"}
                     </span>
                   </div>
-                  <p className="text-[11.5px] text-blue-800 mt-0.5 leading-relaxed">
-                    {pendingInvite.inviter ? `Invited by ${pendingInvite.inviter}. ` : ""}
-                    Sign in or enter the sandbox below — you will automatically join and access this project without re-clicking any link.
+                  <p className="text-[11.5px] text-blue-800 mt-1 leading-relaxed">
+                    You have been invited to collaborate on project: <strong className="font-semibold text-blue-950 font-mono">{pendingInvite.project}</strong> as an <strong className="font-semibold text-blue-950 uppercase">{pendingInvite.role || "Editor"}</strong>.
+                    Sign in with Google to access this shared bi-temporal workspace immediately!
                   </p>
                 </div>
               </div>

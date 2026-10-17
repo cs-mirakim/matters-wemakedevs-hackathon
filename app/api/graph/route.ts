@@ -287,9 +287,12 @@ export async function GET(req: NextRequest) {
     let distinctProjects: string[] = [];
     let dbStatus = "connected";
 
-    if (!isGuest && user?.uid) {
+    const workspaceOwnerHeader = req.headers.get("x-workspace-owner");
+    const targetUid = workspaceOwnerHeader || user?.uid;
+
+    if (!isGuest && targetUid) {
       try {
-        const graph = await getGraphForUser(user.uid);
+        const graph = await getGraphForUser(targetUid);
         const [result, projectsResult]: any = await Promise.all([
           graph.query(GRAPH_CYPHER),
           graph.query(PROJECTS_CYPHER),

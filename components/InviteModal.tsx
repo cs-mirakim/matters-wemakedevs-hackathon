@@ -11,6 +11,7 @@ interface InviteModalProps {
   projects?: Array<{ id: string; name: string }>;
   selectedProject?: string;
   isGuest?: boolean;
+  currentUser?: any;
   onInviteMember?: (member: { name: string; email: string; role: string; projectId: string }) => void;
 }
 
@@ -25,6 +26,7 @@ export default function InviteModal({
   ],
   selectedProject = "all",
   isGuest = false,
+  currentUser = null,
   onInviteMember,
 }: InviteModalProps) {
   const [name, setName] = useState("");
@@ -77,9 +79,16 @@ export default function InviteModal({
     ? "All Projects"
     : chosenProjects.join(", ");
 
-  const currentOrigin = typeof window !== "undefined" ? window.location.origin : "https://matters.ai";
-  const primaryProjectParam = chosenProjects[0] || "all";
-  const inviteLink = `${currentOrigin}/login?inviteProject=${encodeURIComponent(primaryProjectParam)}&inviter=${encodeURIComponent(workspaceName)}`;
+  const currentOrigin = typeof window !== "undefined" ? window.location.origin : "https://matters-wemakedevs-hackathon.vercel.app";
+  const primaryProjectParam = isAllWorkspace || chosenProjects.length === 0 ? "all" : (chosenProjects[0] || "all");
+  const ownerUid = currentUser?.uid || (isGuest ? "sandbox" : "owner");
+  
+  // Real-time link that reflects chosen project, workspace owner, and role assignment
+  const inviteLink = `${currentOrigin}/login?workspaceOwner=${encodeURIComponent(ownerUid)}&inviter=${encodeURIComponent(workspaceName)}&inviteProject=${encodeURIComponent(primaryProjectParam)}&role=${encodeURIComponent(role)}`;
+
+  const whatsappShareUrl = `https://wa.me/?text=${encodeURIComponent(
+    `Join ${workspaceName} on Matters (Real-Time Bi-Temporal Graph Workspace)!\nProject: ${resolvedProjectNames}\nRole: ${role.toUpperCase()}\nAccess Link: ${inviteLink}`
+  )}`;
 
   const handleCopyLink = () => {
     navigator.clipboard.writeText(inviteLink);
@@ -382,7 +391,7 @@ export default function InviteModal({
               <button
                 type="button"
                 onClick={handleCopyLink}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[11.5px] font-medium text-foreground bg-white hover:bg-subtle border border-border rounded-[8px] transition active:scale-[0.99] shrink-0 shadow-sm"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[11.5px] font-medium text-foreground bg-white hover:bg-subtle border border-border rounded-[8px] transition active:scale-[0.99] shrink-0 shadow-sm cursor-pointer"
               >
                 {copied ? (
                   <>
@@ -396,6 +405,19 @@ export default function InviteModal({
                   </>
                 )}
               </button>
+
+              <a
+                href={whatsappShareUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[11.5px] font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100/80 border border-emerald-300/80 rounded-[8px] transition active:scale-[0.99] shrink-0 shadow-xs cursor-pointer"
+                title="Share via WhatsApp"
+              >
+                <svg className="w-3.5 h-3.5 fill-emerald-600" viewBox="0 0 24 24">
+                  <path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.582 2.128 2.182-.573c.978.58 1.911.928 3.145.929 3.178 0 5.767-2.587 5.768-5.766.001-3.187-2.575-5.77-5.764-5.771zm3.392 8.244c-.144.405-.837.774-1.17.824-.299.045-.677.063-1.092-.069-.252-.08-.575-.187-.988-.365-1.739-.751-2.874-2.502-2.961-2.617-.087-.116-.708-.94-.708-1.793s.448-1.273.607-1.446c.159-.173.346-.217.462-.217l.332.006c.106.005.249-.04.39.298.144.347.491 1.2.534 1.287.043.087.072.188.014.303-.058.116-.087.188-.173.289l-.26.303c-.087.087-.177.182-.076.356.101.174.449.741.964 1.201.662.591 1.221.774 1.394.861.174.086.275.072.376-.044.101-.116.433-.506.549-.68.116-.173.231-.145.39-.086s1.011.477 1.184.564.289.13.332.202c.045.072.045.419-.099.824zm-3.392-10.416c-5.522 0-10 4.477-10 10 0 1.764.457 3.42 1.258 4.863l-1.297 4.737 4.863-1.275c1.401.765 3.003 1.175 4.676 1.175 5.523 0 10-4.477 10-10s-4.477-10-10-10z" />
+                </svg>
+                <span>WhatsApp</span>
+              </a>
             </div>
           </div>
 

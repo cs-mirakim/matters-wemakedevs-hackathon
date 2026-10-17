@@ -25,6 +25,8 @@ interface QuickCaptureProps {
   currentUser?: any;
   selectedProject?: string;
   projects?: ProjectItem[];
+  workspaceOwner?: string | null;
+  userRole?: string;
   onMemoryCaptured?: (data: any) => void;
 }
 
@@ -56,6 +58,8 @@ export default function QuickCapture({
   currentUser = null,
   selectedProject = "all",
   projects = [],
+  workspaceOwner = null,
+  userRole = "admin",
   onMemoryCaptured,
 }: QuickCaptureProps) {
   const [text, setText] = useState("");
@@ -138,6 +142,11 @@ export default function QuickCapture({
     options?: { confirmed?: boolean; confirmedData?: any; explicitProject?: string }
   ) => {
     const textToSend = captureText || text;
+    if (userRole?.toLowerCase() === "viewer") {
+      setErrorMessage("You have Viewer (read-only) permissions and cannot commit new memories to this workspace.");
+      return;
+    }
+
     if (!textToSend.trim() || isSubmitting) return;
 
     setIsSubmitting(true);
@@ -155,6 +164,13 @@ export default function QuickCapture({
       } else {
         const authHeader = await getAuthHeader();
         headers["Authorization"] = authHeader;
+      }
+
+      if (workspaceOwner) {
+        headers["x-workspace-owner"] = workspaceOwner;
+      }
+      if (userRole) {
+        headers["x-user-role"] = userRole;
       }
 
       const response = await fetch("/api/capture", {

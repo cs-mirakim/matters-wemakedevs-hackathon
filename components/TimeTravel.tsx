@@ -9,6 +9,7 @@ interface TimeTravelProps {
   isGuest?: boolean;
   selectedProject?: string;
   refreshTrigger?: number;
+  workspaceOwner?: string | null;
   onAsOfDateChange?: (date: string) => void;
   onSelectResult?: (result: any) => void;
 }
@@ -19,6 +20,7 @@ export default function TimeTravel({
   isGuest = false,
   selectedProject = "all",
   refreshTrigger = 0,
+  workspaceOwner = null,
   onAsOfDateChange,
   onSelectResult,
 }: TimeTravelProps) {
@@ -67,6 +69,9 @@ export default function TimeTravel({
           authHeader = `Bearer ${currentUser.uid}`;
         }
         headers["Authorization"] = authHeader;
+        if (workspaceOwner) {
+          headers["x-workspace-owner"] = workspaceOwner;
+        }
       }
 
       let deletedList: string[] = [];

@@ -116,9 +116,18 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    const workspaceOwnerHeader = req.headers.get("x-workspace-owner");
+    const roleHeader = req.headers.get("x-user-role") || "editor";
+    if (roleHeader.toLowerCase() === "viewer") {
+      return NextResponse.json(
+        { error: "Forbidden: You have Viewer (read-only) permissions and cannot commit new memories." },
+        { status: 403 }
+      );
+    }
+
     // If user already confirmed smart clarification dialog
     const dataToSave = confirmedData || (await extractMemoryEntities(text, activeProject, combinedContext)).extracted;
-    return await persistToFalkor(user, dataToSave, sourceId, isGuest);
+    return await persistToFalkor(user, dataToSave, sourceId, isGuest, workspaceOwnerHeader);
   } catch (error: any) {
     console.error("[/api/capture] Server error:", error);
     return NextResponse.json(
@@ -178,7 +187,17 @@ export async function PUT(req: NextRequest) {
       });
     }
 
-    const graph = await getGraphForUser(user.uid);
+    const workspaceOwnerHeader = req.headers.get("x-workspace-owner");
+    const roleHeader = req.headers.get("x-user-role") || "editor";
+    if (roleHeader.toLowerCase() === "viewer") {
+      return NextResponse.json(
+        { error: "Forbidden: You have Viewer (read-only) permissions and cannot edit memories." },
+        { status: 403 }
+      );
+    }
+
+    const targetUid = workspaceOwnerHeader || user.uid;
+    const graph = await getGraphForUser(targetUid);
 
     // Cypher: update memory node, synchronize valid_to on all incoming relationships, and rewire person if changed
     const updateCypher = `
@@ -285,7 +304,17 @@ export async function DELETE(req: NextRequest) {
       });
     }
 
-    const graph = await getGraphForUser(user.uid);
+    const workspaceOwnerHeader = req.headers.get("x-workspace-owner");
+    const roleHeader = req.headers.get("x-user-role") || "editor";
+    if (roleHeader.toLowerCase() === "viewer") {
+      return NextResponse.json(
+        { error: "Forbidden: You have Viewer (read-only) permissions and cannot revert memories." },
+        { status: 403 }
+      );
+    }
+
+    const targetUid = workspaceOwnerHeader || user.uid;
+    const graph = await getGraphForUser(targetUid);
 
     // Cypher: Un-supersede earlier commitment if this memory superseded it, then delete this memory
     const revertCypher = `
@@ -321,7 +350,8 @@ async function persistToFalkor(
   user: any,
   extracted: any,
   sourceId: string,
-  isGuest: boolean
+  isGuest: boolean,
+  workspaceOwner?: string | null
 ) {
   if (isGuest) {
     return NextResponse.json({
@@ -398,7 +428,8 @@ async function persistToFalkor(
   };
 
   try {
-    const graph = await getGraphForUser(user.uid);
+    const targetUid = workspaceOwner || user.uid;
+    const graph = await getGraphForUser(targetUid);
     await graph.query(supersedeCypher, { params });
     await graph.query(createCypher, { params });
 

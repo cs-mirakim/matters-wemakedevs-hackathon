@@ -58,6 +58,11 @@ export default function HomePage() {
   const [refreshTrigger, setRefreshTrigger] = useState<number>(0);
   const [selectedProject, setSelectedProject] = useState<string>("all");
 
+  // Collaboration & Shared Workspace state
+  const [workspaceOwner, setWorkspaceOwner] = useState<string | null>(null);
+  const [sharedWorkspaceName, setSharedWorkspaceName] = useState<string | null>(null);
+  const [userRole, setUserRole] = useState<string>("admin"); // "admin", "editor", "viewer"
+
   // Modals state
   const [isInviteOpen, setIsInviteOpen] = useState<boolean>(false);
   const [isCreateProjectOpen, setIsCreateProjectOpen] = useState<boolean>(false);
@@ -137,19 +142,41 @@ export default function HomePage() {
       }
     });
 
-    // 4. Auto-select invited project from query params or persistent session invite
+    // 4. Auto-detect shared workspace & invited project from query params or persistent invite
     try {
       const urlParams = new URLSearchParams(window.location.search);
       const projParam = urlParams.get("project");
+      const ownerParam = urlParams.get("workspaceOwner");
+      const wsNameParam = urlParams.get("workspaceName");
+      const roleParam = urlParams.get("role");
+
       let pendingProj: string | null = null;
+      let pendingOwner: string | null = null;
+      let pendingWsName: string | null = null;
+      let pendingRole: string | null = null;
+
       const storedPending = sessionStorage.getItem("matters_pending_invite");
       if (storedPending) {
         try {
           const parsed = JSON.parse(storedPending);
           pendingProj = parsed.project;
+          pendingOwner = parsed.workspaceOwner;
+          pendingWsName = parsed.inviter;
+          pendingRole = parsed.role;
           sessionStorage.removeItem("matters_pending_invite");
         } catch {}
       }
+
+      const targetOwner = ownerParam || pendingOwner;
+      const targetWsName = wsNameParam || pendingWsName;
+      const targetRole = roleParam || pendingRole;
+
+      if (targetOwner && targetOwner !== "guest") {
+        setWorkspaceOwner(targetOwner);
+        if (targetWsName) setSharedWorkspaceName(decodeURIComponent(targetWsName));
+        if (targetRole) setUserRole(decodeURIComponent(targetRole));
+      }
+
       const targetProj = projParam || pendingProj;
       if (targetProj) {
         const cleanTarget = cleanProjectName(targetProj);
@@ -483,8 +510,11 @@ export default function HomePage() {
     window.location.href = "/login";
   };
 
-  const graphName = currentUser?.uid
-    ? `matters_${currentUser.uid.substring(0, 8)}`
+  const effectiveGraphOwner = workspaceOwner || currentUser?.uid;
+  const graphName = isGuest
+    ? "matters_sandbox"
+    : effectiveGraphOwner
+    ? `matters_${effectiveGraphOwner.substring(0, 8)}`
     : "matters_sandbox";
 
   // Follow selected persona in guest mode, or logged-in user
@@ -641,6 +671,54 @@ export default function HomePage() {
           />
         )}
 
+        {/* Collaborative Shared Workspace Active Callout Banner */}
+        {workspaceOwner && (
+          <div className="p-3.5 rounded-[12px] bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 text-white flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-md border border-blue-700/50 animate-in fade-in">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-full bg-blue-500/20 border border-blue-400/40 flex items-center justify-center shrink-0">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[13px] font-bold tracking-tight">
+                    Collaborating on: {sharedWorkspaceName || "Shared Team Workspace"}
+                  </span>
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded uppercase font-bold bg-blue-800 text-blue-200 border border-blue-500/40">
+                    Role: {userRole}
+                  </span>
+                  {userRole?.toLowerCase() === "viewer" && (
+                    <span className="text-[11px] text-amber-300 font-medium">
+                      (Read-Only Mode)
+                    </span>
+                  )}
+                </div>
+                <p className="text-[11.5px] text-blue-200/80 mt-0.5">
+                  Connected directly to the workspace owner&apos;s live FalkorDB bi-temporal graph container.
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                setWorkspaceOwner(null);
+                setSharedWorkspaceName(null);
+                setUserRole("admin");
+                try {
+                  const url = new URL(window.location.href);
+                  url.searchParams.delete("workspaceOwner");
+                  url.searchParams.delete("workspaceName");
+                  url.searchParams.delete("role");
+                  window.history.replaceState({}, "", url.pathname + (url.search ? url.search : ""));
+                } catch {}
+                setRefreshTrigger((prev) => prev + 1);
+              }}
+              className="px-3 py-1.5 rounded-[8px] bg-white/10 hover:bg-white/20 text-white text-[11.5px] font-medium transition cursor-pointer shrink-0 border border-white/15"
+            >
+              Switch to My Personal Workspace
+            </button>
+          </div>
+        )}
 
         {/* Live Interactive Demo Storyboard (1-Click Fail-Proof Judges Showcase) */}
         <LiveDemoStoryboard
@@ -666,6 +744,8 @@ export default function HomePage() {
               currentUser={currentUser}
               persona={selectedPersona}
               isGuest={isGuest}
+              workspaceOwner={workspaceOwner}
+              userRole={userRole}
               onNodeClick={(details) => setSelectedMemory(details)}
               onProjectsLoaded={handleProjectsLoaded}
               onAsOfDateChange={setAsOfDate}
@@ -680,6 +760,8 @@ export default function HomePage() {
               currentUser={currentUser}
               selectedProject={selectedProject}
               projects={personaProjects}
+              workspaceOwner={workspaceOwner}
+              userRole={userRole}
               onMemoryCaptured={handleMemoryCaptured}
             />
 
@@ -690,6 +772,7 @@ export default function HomePage() {
               isGuest={isGuest}
               selectedProject={selectedProject}
               refreshTrigger={refreshTrigger}
+              workspaceOwner={workspaceOwner}
               onAsOfDateChange={setAsOfDate}
               onSelectResult={(res) => {
                 let deletedList: string[] = [];
@@ -782,6 +865,7 @@ export default function HomePage() {
         projects={personaProjects}
         selectedProject={selectedProject}
         isGuest={isGuest}
+        currentUser={currentUser}
         onInviteMember={() => setRefreshTrigger((prev) => prev + 1)}
       />
 

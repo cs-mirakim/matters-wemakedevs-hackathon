@@ -24,6 +24,8 @@ interface MemoryGraphProps {
   currentUser?: any;
   persona?: string;
   isGuest?: boolean;
+  workspaceOwner?: string | null;
+  userRole?: string;
   onNodeClick?: (memoryData: any) => void;
   onProjectsLoaded?: (projects: string[]) => void;
   onAsOfDateChange?: (date: string) => void;
@@ -43,6 +45,8 @@ export default function MemoryGraph({
   currentUser = null,
   persona = "aris",
   isGuest = false,
+  workspaceOwner = null,
+  userRole = "admin",
   onNodeClick,
   onProjectsLoaded,
   onAsOfDateChange,
@@ -111,8 +115,12 @@ export default function MemoryGraph({
             headers["x-user-projects"] = encodeURIComponent(userProjs);
           }
         } catch {}
-      }
 
+        if (workspaceOwner) {
+          headers["x-workspace-owner"] = workspaceOwner;
+          headers["x-user-role"] = userRole || "editor";
+        }
+      }
 
       const queryParams = new URLSearchParams({
         project: selectedProject,
@@ -120,6 +128,9 @@ export default function MemoryGraph({
       });
       if (currentUser?.displayName) {
         queryParams.set("userName", currentUser.displayName);
+      }
+      if (workspaceOwner) {
+        queryParams.set("workspaceOwner", workspaceOwner);
       }
       if (isGuest) {
         queryParams.set("guest", "true");
@@ -151,11 +162,11 @@ export default function MemoryGraph({
     } finally {
       setLoading(false);
     }
-  }, [currentUser, selectedProject, persona, isGuest]);
+  }, [currentUser, selectedProject, persona, isGuest, workspaceOwner, userRole]);
 
   useEffect(() => {
     fetchGraphData();
-  }, [fetchGraphData, refreshTrigger, selectedProject, persona, isGuest]);
+  }, [fetchGraphData, refreshTrigger, selectedProject, persona, isGuest, workspaceOwner, userRole]);
 
   // Dynamically recalculate temporal validity states
   useEffect(() => {
