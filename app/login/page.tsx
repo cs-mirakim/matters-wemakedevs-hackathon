@@ -235,7 +235,7 @@ function LoginContent() {
         setErrorMessage(null);
         setSuccessMessage(
           checkData.registered
-            ? "This account is already registered! Please click 'Sign In with Google' below to enter your workspace."
+            ? "You are already registered with this email! You can log in directly — please click 'Sign In with Google' below."
             : "Account registered successfully! Please click 'Sign In with Google' below to enter your workspace."
         );
         isProcessingAuthRef.current = false;
@@ -542,11 +542,33 @@ function LoginContent() {
 
             {/* Notification Banners */}
             {successMessage && (
-              <div className="mb-5 p-3.5 rounded-[12px] bg-emerald-50 border border-emerald-200 text-emerald-800 text-[12.5px] flex items-start gap-2.5 shadow-2xs">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+              <div
+                className={`mb-5 p-3.5 rounded-[12px] border text-[12.5px] flex items-start gap-2.5 shadow-2xs animate-in fade-in ${
+                  successMessage.toLowerCase().includes("already registered")
+                    ? "bg-blue-50 border-blue-200 text-blue-900"
+                    : "bg-emerald-50 border-emerald-200 text-emerald-800"
+                }`}
+              >
+                <CheckCircle2
+                  className={`w-4 h-4 shrink-0 mt-0.5 ${
+                    successMessage.toLowerCase().includes("already registered")
+                      ? "text-blue-600"
+                      : "text-emerald-600"
+                  }`}
+                />
                 <div className="flex-1">
-                  <p className="font-semibold text-emerald-900">Success!</p>
-                  <p className="mt-0.5">{successMessage}</p>
+                  <p
+                    className={`font-semibold ${
+                      successMessage.toLowerCase().includes("already registered")
+                        ? "text-blue-950 font-bold"
+                        : "text-emerald-900 font-bold"
+                    }`}
+                  >
+                    {successMessage.toLowerCase().includes("already registered")
+                      ? "Account Already Registered"
+                      : "Registration Successful!"}
+                  </p>
+                  <p className="mt-0.5 leading-relaxed">{successMessage}</p>
                 </div>
               </div>
             )}
@@ -598,8 +620,43 @@ function LoginContent() {
               </div>
             )}
 
-            {/* Header Title Section */}
+            {/* Segmented Mode Switch Tabs: Sign In / Sign Up */}
+            <div className="flex rounded-[12px] bg-slate-100 p-1 mb-5 border border-slate-200/80">
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveTab("signin");
+                  authActionRef.current = "signin";
+                  setErrorMessage(null);
+                  setSuccessMessage(null);
+                }}
+                className={`flex-1 py-2 text-xs font-semibold rounded-[9px] transition cursor-pointer flex items-center justify-center gap-1.5 ${
+                  activeTab === "signin"
+                    ? "bg-white text-slate-900 shadow-xs border border-slate-200/60 font-bold"
+                    : "text-slate-500 hover:text-slate-800"
+                }`}
+              >
+                <span>Sign In</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveTab("signup");
+                  authActionRef.current = "signup";
+                  setErrorMessage(null);
+                  setSuccessMessage(null);
+                }}
+                className={`flex-1 py-2 text-xs font-semibold rounded-[9px] transition cursor-pointer flex items-center justify-center gap-1.5 ${
+                  activeTab === "signup"
+                    ? "bg-white text-slate-900 shadow-xs border border-slate-200/60 font-bold"
+                    : "text-slate-500 hover:text-slate-800"
+                }`}
+              >
+                <span>Sign Up (New Account)</span>
+              </button>
+            </div>
 
+            {/* Header Title Section */}
             <div>
               <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-blue-50 text-blue-700 border border-blue-200 mb-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
@@ -691,6 +748,7 @@ function LoginContent() {
                     type="button"
                     onClick={() => {
                       setActiveTab("signup");
+                      authActionRef.current = "signup";
                       setErrorMessage(null);
                       setSuccessMessage(null);
                     }}
@@ -706,6 +764,7 @@ function LoginContent() {
                     type="button"
                     onClick={() => {
                       setActiveTab("signin");
+                      authActionRef.current = "signin";
                       setErrorMessage(null);
                       setSuccessMessage(null);
                     }}

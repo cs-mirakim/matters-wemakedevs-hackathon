@@ -59,9 +59,17 @@ export default function HomePage() {
   const [selectedProject, setSelectedProject] = useState<string>("all");
 
   // Collaboration & Shared Workspace state
+  interface SharedWorkspaceEntry {
+    workspaceOwner: string;
+    workspaceName: string;
+    project: string;
+    role: string;
+    joinedAt: string;
+  }
   const [workspaceOwner, setWorkspaceOwner] = useState<string | null>(null);
   const [sharedWorkspaceName, setSharedWorkspaceName] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<string>("admin"); // "admin", "editor", "viewer"
+  const [sharedWorkspaces, setSharedWorkspaces] = useState<SharedWorkspaceEntry[]>([]);
 
   // Modals state
   const [isInviteOpen, setIsInviteOpen] = useState<boolean>(false);
@@ -82,6 +90,14 @@ export default function HomePage() {
     // 1. Purge legacy global key so old dummy projects never linger
     try {
       localStorage.removeItem("matters_user_projects");
+    } catch {}
+
+    // Load saved collaborative workspaces from localStorage
+    try {
+      const storedWs = localStorage.getItem("matters_shared_workspaces");
+      if (storedWs) {
+        setSharedWorkspaces(JSON.parse(storedWs));
+      }
     } catch {}
 
     // 2. Check dev user or guest mode
@@ -170,14 +186,36 @@ export default function HomePage() {
       const targetOwner = ownerParam || pendingOwner;
       const targetWsName = wsNameParam || pendingWsName;
       const targetRole = roleParam || pendingRole;
+      const targetProj = projParam || pendingProj;
 
       if (targetOwner && targetOwner !== "guest") {
         setWorkspaceOwner(targetOwner);
-        if (targetWsName) setSharedWorkspaceName(decodeURIComponent(targetWsName));
-        if (targetRole) setUserRole(decodeURIComponent(targetRole));
+        const decodedWsName = targetWsName ? decodeURIComponent(targetWsName) : "Shared Workspace";
+        const decodedRole = targetRole ? decodeURIComponent(targetRole) : "editor";
+        setSharedWorkspaceName(decodedWsName);
+        setUserRole(decodedRole);
+
+        // Automatically save to matters_shared_workspaces so User B never loses it!
+        try {
+          const stored = localStorage.getItem("matters_shared_workspaces");
+          const list: SharedWorkspaceEntry[] = stored ? JSON.parse(stored) : [];
+          const cleanTargetProj = targetProj ? cleanProjectName(targetProj) : "all";
+          const entry: SharedWorkspaceEntry = {
+            workspaceOwner: targetOwner,
+            workspaceName: decodedWsName,
+            project: cleanTargetProj || "all",
+            role: decodedRole,
+            joinedAt: new Date().toISOString(),
+          };
+          const filtered = list.filter(
+            (item) => item.workspaceOwner !== entry.workspaceOwner || item.project !== entry.project
+          );
+          filtered.push(entry);
+          localStorage.setItem("matters_shared_workspaces", JSON.stringify(filtered));
+          setSharedWorkspaces(filtered);
+        } catch {}
       }
 
-      const targetProj = projParam || pendingProj;
       if (targetProj) {
         const cleanTarget = cleanProjectName(targetProj);
         if (cleanTarget && !isAllProject(cleanTarget)) {
@@ -601,6 +639,68 @@ export default function HomePage() {
     );
   }
 
+  const handleSelectWorkspace = (
+    targetOwner: string | null,
+    targetWsName?: string,
+    targetProj?: string,
+    role?: string
+  ) => {
+    if (!targetOwner) {
+      // Switch back to Personal Workspace
+      setWorkspaceOwner(null);
+      setSharedWorkspaceName(null);
+      setUserRole("admin");
+      try {
+        const url = new URL(window.location.href);
+        url.searchParams.delete("workspaceOwner");
+        url.searchParams.delete("workspaceName");
+        url.searchParams.delete("role");
+        window.history.replaceState({}, "", url.pathname + (url.search ? url.search : ""));
+      } catch {}
+      setRefreshTrigger((prev) => prev + 1);
+      return;
+    }
+
+    // Switch to Collaborative Workspace
+    setWorkspaceOwner(targetOwner);
+    if (targetWsName) setSharedWorkspaceName(targetWsName);
+    if (role) setUserRole(role);
+    if (targetProj && targetProj !== "all") {
+      const clean = cleanProjectName(targetProj);
+      setSelectedProject(clean);
+      setUserProjects((prev) => {
+        if (!prev.some((p) => cleanProjectName(p.id).toLowerCase() === clean.toLowerCase())) {
+          return [...prev, { id: clean, name: formatProjectDisplay(clean) }];
+        }
+        return prev;
+      });
+    }
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.set("workspaceOwner", targetOwner);
+      if (targetWsName) url.searchParams.set("workspaceName", targetWsName);
+      if (role) url.searchParams.set("role", role);
+      if (targetProj && targetProj !== "all") url.searchParams.set("project", targetProj);
+      window.history.replaceState({}, "", url.pathname + (url.search ? url.search : ""));
+    } catch {}
+    setRefreshTrigger((prev) => prev + 1);
+  };
+
+  const handleRemoveSharedWorkspace = (ownerUid: string, proj: string) => {
+    try {
+      const stored = localStorage.getItem("matters_shared_workspaces");
+      const list: SharedWorkspaceEntry[] = stored ? JSON.parse(stored) : [];
+      const filtered = list.filter(
+        (item) => !(item.workspaceOwner === ownerUid && item.project === proj)
+      );
+      localStorage.setItem("matters_shared_workspaces", JSON.stringify(filtered));
+      setSharedWorkspaces(filtered);
+      if (workspaceOwner === ownerUid) {
+        handleSelectWorkspace(null);
+      }
+    } catch {}
+  };
+
   return (
     <div className="min-h-screen flex flex-col bg-background text-foreground selection:bg-primary-soft">
       {/* Top Navbar */}
@@ -637,6 +737,9 @@ export default function HomePage() {
           workspaceOwner={workspaceOwner}
           sharedWorkspaceName={sharedWorkspaceName}
           userRole={userRole}
+          sharedWorkspaces={sharedWorkspaces}
+          onSelectWorkspace={handleSelectWorkspace}
+          onRemoveSharedWorkspace={handleRemoveSharedWorkspace}
         />
 
         {/* Synthetic Sandbox Persona Switcher (Guest Mode only) */}
@@ -705,27 +808,15 @@ export default function HomePage() {
                   )}
                 </div>
                 <p className="text-[11.5px] text-blue-200/80 mt-0.5">
-                  Connected directly to the workspace owner&apos;s live FalkorDB bi-temporal graph container.
+                  Connected directly to the workspace owner&apos;s live FalkorDB bi-temporal graph container. Switch back anytime using the Workspace Selector above.
                 </p>
               </div>
             </div>
 
             <button
               type="button"
-              onClick={() => {
-                setWorkspaceOwner(null);
-                setSharedWorkspaceName(null);
-                setUserRole("admin");
-                try {
-                  const url = new URL(window.location.href);
-                  url.searchParams.delete("workspaceOwner");
-                  url.searchParams.delete("workspaceName");
-                  url.searchParams.delete("role");
-                  window.history.replaceState({}, "", url.pathname + (url.search ? url.search : ""));
-                } catch {}
-                setRefreshTrigger((prev) => prev + 1);
-              }}
-              className="px-3 py-1.5 rounded-[8px] bg-white/10 hover:bg-white/20 text-white text-[11.5px] font-medium transition cursor-pointer shrink-0 border border-white/15"
+              onClick={() => handleSelectWorkspace(null)}
+              className="px-3.5 py-1.5 rounded-[8px] bg-white/10 hover:bg-white/20 text-white text-[11.5px] font-medium transition cursor-pointer shrink-0 border border-white/15"
             >
               Switch to My Personal Workspace
             </button>
