@@ -28,7 +28,12 @@ import {
 function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const initialMode = searchParams.get("mode") === "signup" ? "signup" : "signin";
+  const initialMode =
+    searchParams.get("mode") === "signup" ||
+    searchParams.get("workspaceOwner") ||
+    searchParams.get("inviteProject")
+      ? "signup"
+      : "signin";
 
   const [activeTab, setActiveTab] = useState<"signin" | "signup">(initialMode);
   const [loading, setLoading] = useState(false);
@@ -128,13 +133,51 @@ function LoginContent() {
           if (existing) {
             const parsed = JSON.parse(existing);
             if (parsed?.uid) {
+              const targetOwner = workspaceOwnerParam || pendingInvite?.workspaceOwner;
+              if (targetOwner && targetOwner !== parsed.uid) {
+                // Record shared workspace in localStorage
+                try {
+                  const stored = localStorage.getItem("matters_shared_workspaces");
+                  const list = stored ? JSON.parse(stored) : [];
+                  const entry = {
+                    workspaceOwner: targetOwner,
+                    workspaceName: inviterParam || pendingInvite?.inviter || "Shared Workspace",
+                    project: inviteProjectParam || pendingInvite?.project || "All Projects",
+                    role: roleParam || pendingInvite?.role || "editor",
+                    joinedAt: new Date().toISOString(),
+                  };
+                  const filtered = list.filter(
+                    (item: any) =>
+                      item.workspaceOwner !== entry.workspaceOwner || item.project !== entry.project
+                  );
+                  filtered.push(entry);
+                  localStorage.setItem("matters_shared_workspaces", JSON.stringify(filtered));
+                } catch {}
+
+                const targetParams = new URLSearchParams();
+                targetParams.set("workspaceOwner", targetOwner);
+                if (inviterParam || pendingInvite?.inviter) {
+                  targetParams.set("workspaceName", inviterParam || pendingInvite?.inviter || "");
+                }
+                const targetProj = inviteProjectParam || pendingInvite?.project;
+                if (targetProj && targetProj !== "all") {
+                  targetParams.set("project", targetProj);
+                }
+                const targetRole = roleParam || pendingInvite?.role;
+                if (targetRole) {
+                  targetParams.set("role", targetRole);
+                }
+                window.location.href = `/?${targetParams.toString()}`;
+                return;
+              }
               window.location.href = "/";
+              return;
             }
           }
         } catch {}
       }
     }
-  }, []);
+  }, [workspaceOwnerParam, inviterParam, inviteProjectParam, roleParam, pendingInvite]);
 
   // Unified frictionless login & auto-provisioning
   const completeLogin = async (googleUser: any) => {
@@ -158,8 +201,9 @@ function LoginContent() {
       const checkData = await checkRes.json();
 
       if (!checkData.registered) {
-        if (activeTab === "signin") {
-          // User chose 'Sign In' but account does not exist or was deleted
+        const isInvited = Boolean(pendingInvite?.workspaceOwner || workspaceOwnerParam);
+        if (activeTab === "signin" && !isInvited) {
+          // User chose 'Sign In' but account does not exist or was deleted (and wasn't invited)
           try {
             await firebaseSignOut(auth);
             localStorage.removeItem("matters_dev_user");
@@ -173,7 +217,7 @@ function LoginContent() {
           return;
         }
 
-        // User is in 'signup' mode: provision isolated tenant graph on FalkorDB
+        // User is invited or in 'signup' mode: provision isolated tenant graph on FalkorDB
         setEntryStepText("Provisioning isolated graph container on FalkorDB Cloud...");
         await fetch("/api/auth/user", {
           method: "POST",

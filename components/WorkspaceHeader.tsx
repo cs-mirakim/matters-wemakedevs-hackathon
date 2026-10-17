@@ -35,6 +35,9 @@ interface WorkspaceHeaderProps {
   onDeleteProject?: (id: string) => void;
   onOpenInvite?: () => void;
   onExitSandbox?: () => void;
+  workspaceOwner?: string | null;
+  sharedWorkspaceName?: string | null;
+  userRole?: string;
 }
 
 export default function WorkspaceHeader({
@@ -50,8 +53,12 @@ export default function WorkspaceHeader({
   onDeleteProject,
   onOpenInvite,
   onExitSandbox,
+  workspaceOwner = null,
+  sharedWorkspaceName = null,
+  userRole = "admin",
 }: WorkspaceHeaderProps) {
   const [isManageProjectOpen, setIsManageProjectOpen] = useState(false);
+  const isViewer = userRole?.toLowerCase() === "viewer";
   const availableProjects = projects && projects.length > 0 ? projects : DEFAULT_WORKSPACE_PROJECTS;
   const currentProjectObj =
     availableProjects.find(
@@ -69,14 +76,21 @@ export default function WorkspaceHeader({
           {/* Left: User Identity & Active FalkorDB Tenant */}
           <div className="flex items-center gap-2.5">
             <div className="w-9 h-9 rounded-[10px] bg-primary text-white flex items-center justify-center text-[13px] font-bold shadow-xs">
-              {userName.charAt(0).toUpperCase()}
+              {(sharedWorkspaceName || userName).charAt(0).toUpperCase()}
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-[14px] font-semibold text-foreground tracking-tight" suppressHydrationWarning>
-                  {userName}&apos;s Workspace
+                  {workspaceOwner
+                    ? `${sharedWorkspaceName || "Shared"}'s Workspace`
+                    : `${userName}'s Workspace`}
                 </h2>
-                {isLoggedIn ? (
+                {workspaceOwner ? (
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 font-semibold flex items-center gap-1.5 shadow-2xs">
+                    <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-pulse" />
+                    <span>Collaborator ({userRole?.toUpperCase() || "EDITOR"})</span>
+                  </span>
+                ) : isLoggedIn ? (
                   <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-semibold flex items-center gap-1.5 shadow-2xs">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse" />
                     <span>Live FalkorDB Graph</span>
@@ -115,8 +129,8 @@ export default function WorkspaceHeader({
               <ChevronDown className="w-3.5 h-3.5 text-muted absolute right-2.5 top-2.5 pointer-events-none" />
             </div>
 
-            {/* + Project Button */}
-            {onOpenCreateProject && (
+            {/* + Project Button (Hidden for Viewers) */}
+            {onOpenCreateProject && !isViewer && (
               <button
                 type="button"
                 onClick={onOpenCreateProject}
@@ -128,8 +142,8 @@ export default function WorkspaceHeader({
               </button>
             )}
 
-            {/* Edit/Delete Project Action (if specific project is selected) */}
-            {selectedProject !== "all" && currentProjectObj && (
+            {/* Edit/Delete Project Action (if specific project is selected, hidden for Viewers) */}
+            {selectedProject !== "all" && currentProjectObj && !isViewer && (
               <button
                 type="button"
                 onClick={() => setIsManageProjectOpen(true)}

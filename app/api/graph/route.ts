@@ -288,7 +288,15 @@ export async function GET(req: NextRequest) {
     let dbStatus = "connected";
 
     const workspaceOwnerHeader = req.headers.get("x-workspace-owner");
-    const targetUid = workspaceOwnerHeader || user?.uid;
+    const workspaceOwnerQuery = req.nextUrl.searchParams.get("workspaceOwner");
+    const workspaceOwnerParam = workspaceOwnerHeader || workspaceOwnerQuery;
+    const targetUid =
+      workspaceOwnerParam &&
+      workspaceOwnerParam !== "guest" &&
+      workspaceOwnerParam !== "null" &&
+      workspaceOwnerParam !== "undefined"
+        ? workspaceOwnerParam
+        : user?.uid;
 
     if (!isGuest && targetUid) {
       try {
@@ -404,11 +412,16 @@ export async function GET(req: NextRequest) {
       );
     }
 
+    const normProj = (name?: string | null) =>
+      cleanProjectName(name)
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, "");
+
     let filtered = records;
     if (requestedProject && !isAllProject(requestedProject)) {
-      const targetNorm = cleanProjectName(requestedProject).toLowerCase();
+      const targetNorm = normProj(requestedProject);
       filtered = records.filter(
-        (r) => r.project && cleanProjectName(r.project).toLowerCase() === targetNorm
+        (r) => r.project && normProj(r.project) === targetNorm
       );
     }
 
@@ -442,13 +455,30 @@ export async function GET(req: NextRequest) {
       } catch {}
     }
 
+    // Always ensure requested project is in distinctProjects so newly created/invited project is never blank
+    if (requestedProject && !isAllProject(requestedProject)) {
+      const reqClean = cleanProjectName(requestedProject);
+      if (reqClean && !isAllProject(reqClean)) {
+        if (!distinctProjects.some((p) => normProj(p) === normProj(reqClean))) {
+          distinctProjects.push(reqClean);
+        }
+      }
+    }
+
     // Group records by Project and Person (including empty projects!)
     const projectsMap = new Map<string, any[]>();
     for (const proj of distinctProjects) {
       if (requestedProject && !isAllProject(requestedProject)) {
-        if (cleanProjectName(proj).toLowerCase() !== cleanProjectName(requestedProject).toLowerCase()) continue;
+        if (normProj(proj) !== normProj(requestedProject)) continue;
       }
       projectsMap.set(proj, []);
+    }
+
+    if (requestedProject && !isAllProject(requestedProject)) {
+      const reqClean = cleanProjectName(requestedProject);
+      if (reqClean && !projectsMap.has(reqClean)) {
+        projectsMap.set(reqClean, []);
+      }
     }
 
     for (const rec of filtered) {
@@ -522,10 +552,12 @@ export async function GET(req: NextRequest) {
       type: "project",
       position: { x: 280, y: 30 },
       data: {
-        title: `${userName}'s Workspace`,
+        title: workspaceOwnerParam && clientProvidedName
+          ? `${clientProvidedName}'s Workspace`
+          : `${userName}'s Workspace`,
         description: isGuest
           ? `Guest Sandbox Session • ${activePersonaName} Persona Ecosystem`
-          : `Primary Hub • FalkorDB Container: matters_${user.uid.substring(0, 8)}`,
+          : `Primary Hub • FalkorDB Container: matters_${(targetUid || user?.uid || "live").substring(0, 8)}`,
       },
     });
 

@@ -8,6 +8,7 @@ interface WorkspaceChatProps {
   selectedProject?: string;
   persona?: string;
   refreshTrigger?: number;
+  workspaceOwner?: string | null;
 }
 
 interface ChatMessage {
@@ -42,6 +43,7 @@ export default function WorkspaceChat({
   selectedProject = "all",
   persona = "aris",
   refreshTrigger = 0,
+  workspaceOwner = null,
 }: WorkspaceChatProps) {
   const [inputMessage, setInputMessage] = useState("");
   const [isSending, setIsSending] = useState(false);
@@ -98,6 +100,9 @@ export default function WorkspaceChat({
           authHeader = `Bearer ${currentUser.uid}`;
         }
         headers["Authorization"] = authHeader;
+        if (workspaceOwner) {
+          headers["x-workspace-owner"] = workspaceOwner;
+        }
       }
 
       let deletedList: string[] = [];

@@ -355,6 +355,15 @@ export default function InviteModal({
                   <option value="lead">Project Lead / Manager</option>
                   <option value="agent">Autonomous AI Agent (Security / QA)</option>
                 </select>
+                <p className="text-[10.5px] text-muted mt-1.5 leading-tight">
+                  {role === "viewer"
+                    ? "🔒 Viewer: Read-only access. Can inspect graph and timeline, but cannot commit or edit."
+                    : role === "lead"
+                    ? "⭐ Lead: Full project manager rights with co-ownership and member coordination."
+                    : role === "agent"
+                    ? "🤖 Agent: Autonomous AI worker with automated ingestion and graph audit rights."
+                    : "✏️ Editor: Can commit, update, and manage commitments in this shared project graph."}
+                </p>
               </div>
 
               <button

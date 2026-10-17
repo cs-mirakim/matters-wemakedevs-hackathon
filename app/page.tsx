@@ -182,6 +182,12 @@ export default function HomePage() {
         const cleanTarget = cleanProjectName(targetProj);
         if (cleanTarget && !isAllProject(cleanTarget)) {
           setSelectedProject(cleanTarget);
+          setUserProjects((prev) => {
+            if (!prev.some((p) => cleanProjectName(p.id).toLowerCase() === cleanTarget.toLowerCase())) {
+              return [...prev, { id: cleanTarget, name: formatProjectDisplay(cleanTarget) }];
+            }
+            return prev;
+          });
         }
       }
     } catch {}
@@ -436,6 +442,9 @@ export default function HomePage() {
 
       savedUserProjects.forEach((p) => addProject(p.id));
       filtered.forEach((pName) => addProject(pName));
+      if (selectedProject && !isAllProject(selectedProject)) {
+        addProject(selectedProject);
+      }
 
       return combinedProjects;
     });
@@ -625,6 +634,9 @@ export default function HomePage() {
           onDeleteProject={handleDeleteProject}
           onOpenInvite={() => setIsInviteOpen(true)}
           onExitSandbox={() => setIsExitSandboxOpen(true)}
+          workspaceOwner={workspaceOwner}
+          sharedWorkspaceName={sharedWorkspaceName}
+          userRole={userRole}
         />
 
         {/* Synthetic Sandbox Persona Switcher (Guest Mode only) */}
@@ -813,6 +825,8 @@ export default function HomePage() {
               projects={userProjects}
               currentUser={currentUser}
               asOfDate={asOfDate}
+              workspaceOwner={workspaceOwner}
+              userRole={userRole}
               onMemoryUpdated={(updated) => {
                 setSelectedMemory(updated);
                 if (updated?.status === "current" && updated?.validFrom && asOfDate < updated.validFrom) {
@@ -834,6 +848,7 @@ export default function HomePage() {
               selectedProject={selectedProject}
               persona={selectedPersona}
               refreshTrigger={refreshTrigger}
+              workspaceOwner={workspaceOwner}
             />
           </div>
         </div>

@@ -10,6 +10,8 @@ interface EditMemoryModalProps {
   projects?: { id: string; name: string }[];
   currentUser?: any;
   asOfDate?: string;
+  workspaceOwner?: string | null;
+  userRole?: string;
   onClose: () => void;
   onSaved: (updatedMemory: any) => void;
 }
@@ -20,6 +22,8 @@ export default function EditMemoryModal({
   projects = [],
   currentUser = null,
   asOfDate,
+  workspaceOwner = null,
+  userRole = "admin",
   onClose,
   onSaved,
 }: EditMemoryModalProps) {
@@ -83,6 +87,13 @@ export default function EditMemoryModal({
         } catch {
           headers["Authorization"] = `Bearer ${currentUser.uid}`;
         }
+      }
+
+      if (workspaceOwner) {
+        headers["x-workspace-owner"] = workspaceOwner;
+      }
+      if (userRole) {
+        headers["x-user-role"] = userRole;
       }
 
       const payload = {

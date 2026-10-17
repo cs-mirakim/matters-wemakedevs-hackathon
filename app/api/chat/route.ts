@@ -59,9 +59,15 @@ export async function POST(req: NextRequest) {
 
     // 1. Fetch memory records from FalkorDB or Sandbox
     let memories: any[] = [];
-    if (!isGuest && user?.uid) {
+    const workspaceOwnerHeader = req.headers.get("x-workspace-owner");
+    const targetUid =
+      workspaceOwnerHeader && workspaceOwnerHeader !== "guest" && workspaceOwnerHeader !== "null"
+        ? workspaceOwnerHeader
+        : user?.uid;
+
+    if (!isGuest && targetUid) {
       try {
-        const graph = await getGraphForUser(user.uid);
+        const graph = await getGraphForUser(targetUid);
         const res: any = await graph.query(GRAPH_CONTEXT_CYPHER);
         memories = res?.data || [];
       } catch (err) {
